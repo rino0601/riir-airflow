@@ -1,0 +1,15 @@
+[project]
+name = "riir-airflow"
+version = "0.1.0"
+description = "Add your description here"
+dependencies = []
+readme = "README.md"
+requires-python = ">= 3.12"
+
+[tool.rye]
+managed = true
+virtual = true
+dev-dependencies = []
+
+[tool.rye.workspace]
+members = ["riir-*"]

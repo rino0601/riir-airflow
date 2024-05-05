@@ -8,7 +8,7 @@ Rewrite airflow in rust. it might be help to simplify to operate airflow.
 
 [KOREAN(한국어)](./README.ko.md)
 
-> ![NOTE]
+> [!NOTE]
 > maintainer's mother tongue is Korean. so Korean README.md is accurate than English.
 
 ## Goal

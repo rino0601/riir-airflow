@@ -133,6 +133,9 @@ python3.13은 아직 안나왔지만, 이 프로젝트가 실험 딱지를 떼�
 https://peps.python.org/pep-0684/
 https://peps.python.org/pep-0554/
 
+하위 호환성 포기와 비슷한 얘기일 수 있는데, 쓸데 없는 기능을 버릴 수 있습니다.
+이를테면 daemon 기능을 airflow 가 스스로 가져야 할까요? 어차피 dockerlize 하면 daemon 일 이유 없지 않을까요? airflow 스스로는 스케쥴링에 집중하는게 옳겠습니다.
+
 ### Why? - on maintainer's side
 
 저는 2017년 첫 입사 후, 지금(2024년 5월)까지 본업에서 apache-airflow 를 쓰고 있습니다.

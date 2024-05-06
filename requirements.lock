@@ -8,3 +8,447 @@
 #   with-sources: false
 
 -e file:riir-airflow
+aiohttp==3.9.5
+    # via apache-airflow-providers-http
+aiosignal==1.3.1
+    # via aiohttp
+alembic==1.13.1
+    # via apache-airflow
+annotated-types==0.6.0
+    # via pydantic
+anyio==4.3.0
+    # via httpx
+    # via starlette
+    # via watchfiles
+apache-airflow==2.9.1
+    # via apache-airflow-providers-common-io
+    # via apache-airflow-providers-common-sql
+    # via apache-airflow-providers-fab
+    # via apache-airflow-providers-ftp
+    # via apache-airflow-providers-http
+    # via apache-airflow-providers-imap
+    # via apache-airflow-providers-smtp
+    # via apache-airflow-providers-sqlite
+    # via riir-airflow
+apache-airflow-providers-common-io==1.3.1
+    # via apache-airflow
+apache-airflow-providers-common-sql==1.13.0
+    # via apache-airflow
+    # via apache-airflow-providers-sqlite
+apache-airflow-providers-fab==1.1.0
+    # via apache-airflow
+apache-airflow-providers-ftp==3.9.0
+    # via apache-airflow
+apache-airflow-providers-http==4.11.0
+    # via apache-airflow
+apache-airflow-providers-imap==3.6.0
+    # via apache-airflow
+apache-airflow-providers-smtp==1.7.0
+    # via apache-airflow
+apache-airflow-providers-sqlite==3.8.0
+    # via apache-airflow
+apispec==6.6.1
+    # via flask-appbuilder
+argcomplete==3.3.0
+    # via apache-airflow
+asgiref==3.8.1
+    # via apache-airflow
+    # via apache-airflow-providers-http
+attrs==23.2.0
+    # via aiohttp
+    # via apache-airflow
+    # via jsonschema
+    # via referencing
+babel==2.15.0
+    # via flask-babel
+blinker==1.8.1
+    # via apache-airflow
+cachelib==0.9.0
+    # via flask-caching
+    # via flask-session
+certifi==2024.2.2
+    # via httpcore
+    # via httpx
+    # via requests
+cffi==1.16.0
+    # via cryptography
+charset-normalizer==3.3.2
+    # via requests
+click==8.1.7
+    # via clickclick
+    # via flask
+    # via flask-appbuilder
+    # via typer
+    # via uvicorn
+clickclick==20.10.2
+    # via connexion
+colorama==0.4.6
+    # via flask-appbuilder
+colorlog==4.8.0
+    # via apache-airflow
+configupdater==3.2
+    # via apache-airflow
+connexion==2.14.2
+    # via apache-airflow
+cron-descriptor==1.4.3
+    # via apache-airflow
+croniter==2.0.5
+    # via apache-airflow
+cryptography==42.0.6
+    # via apache-airflow
+deprecated==1.2.14
+    # via apache-airflow
+    # via limits
+    # via opentelemetry-api
+    # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-exporter-otlp-proto-http
+dill==0.3.8
+    # via apache-airflow
+dnspython==2.6.1
+    # via email-validator
+docutils==0.21.2
+    # via python-daemon
+email-validator==2.1.1
+    # via fastapi
+    # via flask-appbuilder
+fastapi==0.111.0
+    # via fastapi-cli
+    # via riir-airflow
+fastapi-cli==0.0.2
+    # via fastapi
+flask==2.2.5
+    # via apache-airflow
+    # via apache-airflow-providers-fab
+    # via connexion
+    # via flask-appbuilder
+    # via flask-babel
+    # via flask-caching
+    # via flask-jwt-extended
+    # via flask-limiter
+    # via flask-login
+    # via flask-session
+    # via flask-sqlalchemy
+    # via flask-wtf
+flask-appbuilder==4.4.1
+    # via apache-airflow-providers-fab
+flask-babel==2.0.0
+    # via flask-appbuilder
+flask-caching==2.3.0
+    # via apache-airflow
+flask-jwt-extended==4.6.0
+    # via flask-appbuilder
+flask-limiter==3.6.0
+    # via flask-appbuilder
+flask-login==0.6.3
+    # via apache-airflow-providers-fab
+    # via flask-appbuilder
+flask-session==0.5.0
+    # via apache-airflow
+flask-sqlalchemy==2.5.1
+    # via flask-appbuilder
+flask-wtf==1.2.1
+    # via apache-airflow
+    # via flask-appbuilder
+frozenlist==1.4.1
+    # via aiohttp
+    # via aiosignal
+fsspec==2024.3.1
+    # via apache-airflow
+    # via universal-pathlib
+google-re2==1.1.20240501
+    # via apache-airflow
+    # via apache-airflow-providers-fab
+googleapis-common-protos==1.63.0
+    # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-exporter-otlp-proto-http
+greenlet==3.0.3
+    # via sqlalchemy
+grpcio==1.63.0
+    # via opentelemetry-exporter-otlp-proto-grpc
+gunicorn==22.0.0
+    # via apache-airflow
+h11==0.14.0
+    # via httpcore
+    # via uvicorn
+httpcore==1.0.5
+    # via httpx
+httptools==0.6.1
+    # via uvicorn
+httpx==0.27.0
+    # via apache-airflow
+    # via fastapi
+idna==3.7
+    # via anyio
+    # via email-validator
+    # via httpx
+    # via requests
+    # via yarl
+importlib-metadata==7.0.0
+    # via opentelemetry-api
+importlib-resources==6.4.0
+    # via limits
+inflection==0.5.1
+    # via connexion
+itsdangerous==2.2.0
+    # via apache-airflow
+    # via connexion
+    # via flask
+    # via flask-wtf
+jinja2==3.1.4
+    # via apache-airflow
+    # via fastapi
+    # via flask
+    # via flask-babel
+    # via python-nvd3
+jsonschema==4.22.0
+    # via apache-airflow
+    # via connexion
+    # via flask-appbuilder
+jsonschema-specifications==2023.12.1
+    # via jsonschema
+lazy-object-proxy==1.10.0
+    # via apache-airflow
+limits==3.11.0
+    # via flask-limiter
+linkify-it-py==2.0.3
+    # via apache-airflow
+lockfile==0.12.2
+    # via apache-airflow
+    # via python-daemon
+mako==1.3.3
+    # via alembic
+markdown-it-py==3.0.0
+    # via apache-airflow
+    # via mdit-py-plugins
+    # via rich
+markupsafe==2.1.5
+    # via apache-airflow
+    # via jinja2
+    # via mako
+    # via werkzeug
+    # via wtforms
+marshmallow==3.21.2
+    # via flask-appbuilder
+    # via marshmallow-oneofschema
+    # via marshmallow-sqlalchemy
+marshmallow-oneofschema==3.1.1
+    # via apache-airflow
+marshmallow-sqlalchemy==0.28.2
+    # via flask-appbuilder
+mdit-py-plugins==0.4.0
+    # via apache-airflow
+mdurl==0.1.2
+    # via markdown-it-py
+methodtools==0.4.7
+    # via apache-airflow
+more-itertools==10.2.0
+    # via apache-airflow-providers-common-sql
+multidict==6.0.5
+    # via aiohttp
+    # via yarl
+opentelemetry-api==1.24.0
+    # via apache-airflow
+    # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-exporter-otlp-proto-http
+    # via opentelemetry-sdk
+opentelemetry-exporter-otlp==1.24.0
+    # via apache-airflow
+opentelemetry-exporter-otlp-proto-common==1.24.0
+    # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-exporter-otlp-proto-grpc==1.24.0
+    # via opentelemetry-exporter-otlp
+opentelemetry-exporter-otlp-proto-http==1.24.0
+    # via opentelemetry-exporter-otlp
+opentelemetry-proto==1.24.0
+    # via opentelemetry-exporter-otlp-proto-common
+    # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-sdk==1.24.0
+    # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-exporter-otlp-proto-http
+opentelemetry-semantic-conventions==0.45b0
+    # via opentelemetry-sdk
+ordered-set==4.1.0
+    # via flask-limiter
+orjson==3.10.3
+    # via fastapi
+packaging==24.0
+    # via apache-airflow
+    # via apispec
+    # via connexion
+    # via gunicorn
+    # via limits
+    # via marshmallow
+    # via marshmallow-sqlalchemy
+pathspec==0.12.1
+    # via apache-airflow
+pendulum==3.0.0
+    # via apache-airflow
+pluggy==1.5.0
+    # via apache-airflow
+prison==0.2.1
+    # via flask-appbuilder
+protobuf==4.25.3
+    # via googleapis-common-protos
+    # via opentelemetry-proto
+psutil==5.9.8
+    # via apache-airflow
+pycparser==2.22
+    # via cffi
+pydantic==2.7.1
+    # via fastapi
+    # via pydantic-settings
+pydantic-core==2.18.2
+    # via pydantic
+pydantic-settings==2.2.1
+    # via riir-airflow
+pygments==2.18.0
+    # via apache-airflow
+    # via rich
+pyjwt==2.8.0
+    # via apache-airflow
+    # via flask-appbuilder
+    # via flask-jwt-extended
+python-daemon==3.0.1
+    # via apache-airflow
+python-dateutil==2.9.0.post0
+    # via apache-airflow
+    # via croniter
+    # via flask-appbuilder
+    # via pendulum
+    # via time-machine
+python-dotenv==1.0.1
+    # via pydantic-settings
+    # via uvicorn
+python-multipart==0.0.9
+    # via fastapi
+python-nvd3==0.16.0
+    # via apache-airflow
+python-slugify==8.0.4
+    # via apache-airflow
+    # via python-nvd3
+pytz==2024.1
+    # via croniter
+    # via flask-babel
+pyyaml==6.0.1
+    # via apispec
+    # via clickclick
+    # via connexion
+    # via uvicorn
+referencing==0.35.1
+    # via jsonschema
+    # via jsonschema-specifications
+requests==2.31.0
+    # via apache-airflow
+    # via apache-airflow-providers-http
+    # via connexion
+    # via opentelemetry-exporter-otlp-proto-http
+    # via requests-toolbelt
+requests-toolbelt==1.0.0
+    # via apache-airflow-providers-http
+rfc3339-validator==0.1.4
+    # via apache-airflow
+rich==13.7.1
+    # via apache-airflow
+    # via flask-limiter
+    # via rich-argparse
+    # via typer
+rich-argparse==1.4.0
+    # via apache-airflow
+rpds-py==0.18.0
+    # via jsonschema
+    # via referencing
+setproctitle==1.3.3
+    # via apache-airflow
+setuptools==69.5.1
+    # via python-daemon
+sh==2.0.6
+    # via riir-airflow
+shellingham==1.5.4
+    # via typer
+six==1.16.0
+    # via prison
+    # via python-dateutil
+    # via rfc3339-validator
+    # via wirerope
+sniffio==1.3.1
+    # via anyio
+    # via httpx
+sqlalchemy==1.4.52
+    # via alembic
+    # via apache-airflow
+    # via flask-appbuilder
+    # via flask-sqlalchemy
+    # via marshmallow-sqlalchemy
+    # via sqlalchemy-jsonfield
+    # via sqlalchemy-utils
+sqlalchemy-jsonfield==1.0.2
+    # via apache-airflow
+sqlalchemy-utils==0.41.2
+    # via flask-appbuilder
+sqlparse==0.5.0
+    # via apache-airflow-providers-common-sql
+starlette==0.37.2
+    # via fastapi
+tabulate==0.9.0
+    # via apache-airflow
+tenacity==8.2.3
+    # via apache-airflow
+termcolor==2.4.0
+    # via apache-airflow
+text-unidecode==1.3
+    # via python-slugify
+time-machine==2.14.1
+    # via pendulum
+typer==0.12.3
+    # via fastapi-cli
+    # via riir-airflow
+typing-extensions==4.11.0
+    # via alembic
+    # via fastapi
+    # via flask-limiter
+    # via limits
+    # via opentelemetry-sdk
+    # via pydantic
+    # via pydantic-core
+    # via typer
+tzdata==2024.1
+    # via pendulum
+uc-micro-py==1.0.3
+    # via linkify-it-py
+ujson==5.9.0
+    # via fastapi
+unicodecsv==0.14.1
+    # via apache-airflow
+universal-pathlib==0.2.2
+    # via apache-airflow
+urllib3==2.2.1
+    # via requests
+uvicorn==0.29.0
+    # via fastapi
+    # via fastapi-cli
+uvloop==0.19.0
+    # via uvicorn
+watchfiles==0.21.0
+    # via uvicorn
+websockets==12.0
+    # via uvicorn
+werkzeug==2.2.3
+    # via apache-airflow
+    # via connexion
+    # via flask
+    # via flask-appbuilder
+    # via flask-jwt-extended
+    # via flask-login
+wirerope==0.4.7
+    # via methodtools
+wrapt==1.16.0
+    # via deprecated
+wtforms==3.1.2
+    # via flask-appbuilder
+    # via flask-wtf
+yarl==1.9.4
+    # via aiohttp
+zipp==3.18.1
+    # via importlib-metadata

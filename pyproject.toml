@@ -9,7 +9,7 @@ requires-python = ">= 3.12"
 [tool.rye]
 managed = true
 virtual = true
-dev-dependencies = []
+dev-dependencies = ["pytest>=8.2.0"]
 
 [tool.rye.workspace]
 members = ["riir-*"]

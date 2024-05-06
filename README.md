@@ -16,3 +16,4 @@ Rewrite airflow in rust. it might be help to simplify to operate airflow.
 - (nearly) drop-in-replacement for apache-airflow
 - simplify architecture
 - simplify python dependency
+- simplify DAG deploy

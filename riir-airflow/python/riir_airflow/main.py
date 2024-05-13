@@ -4,6 +4,7 @@ from multiprocessing import Process
 from pprint import pformat
 from typing import TypedDict
 from fastapi.datastructures import State
+from fastapi.responses import ORJSONResponse
 import typer
 import uvicorn
 from airflow.utils import db
@@ -27,7 +28,6 @@ async def lifespan(app: FastAPI):
 
 
 cli_app = typer.Typer()
-web_app = FastAPI()
 
 
 @cli_app.callback()
@@ -61,31 +61,40 @@ async def scheduler_loop(state: SchedulerStateDict):
     print(pformat(state))
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # make process pool
+    # loop = asyncio.get_running_loop()
+    state = SchedulerStateDict(scheduler_on=True, foo=1, tick=None)
+    sloop = asyncio.create_task(scheduler_loop(state))
+    yield ASGIStateDict(scheduler=state, foo=5)
+    state["scheduler_on"] = False
+    await sloop
+
+
+web_app = FastAPI(lifespan=_lifespan, default_response_class=ORJSONResponse)
+
+
+@web_app.get("/")
+def index():
+    return {"msg": "Hello World"}
+
+
+@web_app.get("/show")
+async def show(req: Request):
+    return req.state._state
+
+
+@web_app.put("/down")
+async def down(req: Request):
+    scheduler: SchedulerStateDict = req.state.scheduler
+    scheduler["scheduler_on"] = False
+    return req.state._state
+
+
 @cli_app.command()
 def poc():
-    @asynccontextmanager
-    async def _lifespan(app: FastAPI):
-        # make process pool
-        # loop = asyncio.get_running_loop()
-        state = SchedulerStateDict(scheduler_on=True, foo=1, tick=None)
-        sloop = asyncio.create_task(scheduler_loop(state))
-        yield ASGIStateDict(scheduler=state, foo=5)
-        state["scheduler_on"] = False
-        await sloop
-
-    app = FastAPI(lifespan=_lifespan)
-
-    @app.get("/show")
-    async def show(req: Request):
-        return pformat(req.state._state)
-
-    @app.put("/down")
-    async def down(req: Request):
-        scheduler: SchedulerStateDict = req.state.scheduler
-        scheduler["scheduler_on"] = False
-        return pformat(req.state._state)
-
-    uvicorn.run(app)
+    uvicorn.run(web_app)
 
 
 @contextmanager

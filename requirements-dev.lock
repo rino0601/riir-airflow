@@ -275,6 +275,7 @@ ordered-set==4.1.0
     # via flask-limiter
 orjson==3.10.3
     # via fastapi
+    # via riir-airflow
 packaging==24.0
     # via apache-airflow
     # via apispec

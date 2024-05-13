@@ -3,5 +3,11 @@
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
-    "ruff.lint.run": "onSave"
+    "ruff.organizeImports": true,
+    "ruff.lint.run": "onSave",
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }

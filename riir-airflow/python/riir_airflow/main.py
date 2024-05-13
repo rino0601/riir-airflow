@@ -1,10 +1,6 @@
 import asyncio
-from datetime import datetime
+
 from multiprocessing import Process
-from pprint import pformat
-from typing import TypedDict
-from fastapi.datastructures import State
-from fastapi.responses import ORJSONResponse
 import typer
 import uvicorn
 from airflow.utils import db
@@ -13,18 +9,11 @@ from airflow.executors.executor_loader import ExecutorLoader
 from airflow.jobs.job import Job, run_job
 from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
 from airflow.www.app import cached_app
-from fastapi import FastAPI
-from fastapi.requests import Request
 from fastapi.middleware.wsgi import WSGIMiddleware
-from contextlib import asynccontextmanager, contextmanager
+from contextlib import contextmanager
 from sh import Command
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # make process pool
-    # loop = asyncio.get_running_loop()
-    yield {}
+from riir_airflow._core.fastapi_app import web_app
 
 
 cli_app = typer.Typer()
@@ -35,61 +24,6 @@ def callback():
     """
     Rewrite Airflow in Rust.
     """
-
-
-class SchedulerStateDict(TypedDict):
-    scheduler_on: bool
-    tick: datetime | None
-    foo: int | None
-
-
-class ASGIStateDict(TypedDict):
-    scheduler: SchedulerStateDict
-    foo: int | None
-
-
-async def scheduler_loop(state: SchedulerStateDict):
-    try:
-        while state["scheduler_on"]:
-            state["tick"] = datetime.now()
-            print(pformat(state))
-            await asyncio.sleep(1)
-    except Exception:
-        state["scheduler_on"] = False
-        raise
-    print("DOWN!")
-    print(pformat(state))
-
-
-@asynccontextmanager
-async def _lifespan(app: FastAPI):
-    # make process pool
-    # loop = asyncio.get_running_loop()
-    state = SchedulerStateDict(scheduler_on=True, foo=1, tick=None)
-    sloop = asyncio.create_task(scheduler_loop(state))
-    yield ASGIStateDict(scheduler=state, foo=5)
-    state["scheduler_on"] = False
-    await sloop
-
-
-web_app = FastAPI(lifespan=_lifespan, default_response_class=ORJSONResponse)
-
-
-@web_app.get("/")
-def index():
-    return {"msg": "Hello World"}
-
-
-@web_app.get("/show")
-async def show(req: Request):
-    return req.state._state
-
-
-@web_app.put("/down")
-async def down(req: Request):
-    scheduler: SchedulerStateDict = req.state.scheduler
-    scheduler["scheduler_on"] = False
-    return req.state._state
 
 
 @cli_app.command()

@@ -77,14 +77,6 @@ async def create_scheduler_proc():
         typer.echo(line.rstrip())
 
 
-async def create_webserver():
-    flask_app = cached_app()
-    web_app.mount("/", WSGIMiddleware(flask_app))
-    server_config = uvicorn.Config(web_app, port=8080, log_level="info")
-    server = uvicorn.Server(server_config)
-    await server.serve()
-
-
 # 아래처럼 함으로서 api 덮어 쓸 수 있음은 확인함.
 # @web_app.get("/health")
 # async def h():
@@ -123,23 +115,8 @@ def standalone():
     _user_info = {"username": user_name, "password": password}
     typer.echo(f"Login with username: {user_name}  password: {password}")
 
-    async def main():
-        # https://gist.github.com/tenuki/ff67f87cba5c4c04fd08d9c800437477?permalink_comment_id=4236491#gistcomment-4236491
-        done, pending = await asyncio.wait(
-            [
-                asyncio.create_task(create_webserver()),
-                asyncio.create_task(create_scheduler_proc()),
-            ],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-        typer.echo(f"{done =}")
-        typer.echo(f"{pending =}")
-        for pending_task in pending:
-            pending_task.cancel("Another service died, server is shutting down")
-
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        typer.echo(e)
-    typer.echo("DONE!")
+    flask_app = cached_app()
+    web_app.mount("/", WSGIMiddleware(flask_app))
+    server_config = uvicorn.Config(web_app, port=8080, log_level="info")
+    server = uvicorn.Server(server_config)
+    server.run()

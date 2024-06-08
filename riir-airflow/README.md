@@ -4,5 +4,6 @@ Describe your project here.
 
 ```sh
 riir-airflow --help
-riir-airflow standalone
+
+./airflow.sh standalone
 ```

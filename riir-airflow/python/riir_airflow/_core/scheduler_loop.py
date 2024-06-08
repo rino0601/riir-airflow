@@ -259,7 +259,7 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
             )
 
         for loop_count in itertools.count(start=1):
-            print(loop_count)
+            self.log.info("Entering scheduler loop count %d", loop_count)
             with Stats.timer("scheduler.scheduler_loop_duration") as timer:
                 if self.using_sqlite and self.processor_agent:
                     self.processor_agent.run_single_parsing_loop()
@@ -274,6 +274,7 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
                     num_queued_tis = self._do_scheduling(session)
 
                     self.job.executor.heartbeat()
+                    # TODO. await self.job.executor.aheartbeat() 같은걸 하기
                     session.expunge_all()
                     num_finished_events = self._process_executor_events(session=session)
                 if self.processor_agent:

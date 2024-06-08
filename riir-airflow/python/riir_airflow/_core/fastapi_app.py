@@ -6,7 +6,6 @@ from typing import TypedDict
 from fastapi.responses import ORJSONResponse
 
 from contextlib import asynccontextmanager
-from random import shuffle
 
 from riir_airflow._core.scheduler_loop import (
     AsyncSchedulerJobRunner,
@@ -31,6 +30,23 @@ web_app = FastAPI(lifespan=_lifespan, default_response_class=ORJSONResponse)
 def do_not_impl_root():
     this path reserved for airflow web ui!
 """
+
+
+# 아래처럼 함으로서 api 덮어 쓸 수 있음은 확인함.
+# @web_app.get("/health")
+# async def h():
+#     return {
+#         "dag_processor": {"latest_dag_processor_heartbeat": None, "status": None},
+#         "metadatabase": {"status": "healthy"},
+#         "scheduler": {
+#             "latest_scheduler_heartbeat": "2024-05-06T11:20:08.814069+00:00",
+#             "status": "unhealthy",
+#         },
+#         "triggerer": {
+#             "latest_triggerer_heartbeat": "2024-05-06T11:20:06.237693+00:00",
+#             "status": "unhealthy",
+#         },
+#     }
 
 
 @web_app.get("/show")

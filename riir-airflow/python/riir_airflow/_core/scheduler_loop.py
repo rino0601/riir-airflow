@@ -273,8 +273,7 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
                 with create_session() as session:
                     num_queued_tis = self._do_scheduling(session)
 
-                    self.job.executor.heartbeat()
-                    # TODO. await self.job.executor.aheartbeat() 같은걸 하기
+                    await self.job.executor.aheartbeat()
                     session.expunge_all()
                     num_finished_events = self._process_executor_events(session=session)
                 if self.processor_agent:

@@ -12,14 +12,16 @@ repo 를 여는 시점에, 이 프로젝트는 4가지 목표를 가지고 있�
 
 - riir-airflow 는 [Public Interface of Airflow](https://airflow.apache.org/docs/apache-airflow/stable/public-airflow-interface.html) 를 준수 해야 합니다. 
 - 따라서 airflow 커뮤니티의 puglins, providers 를 계속 사용할 수 있을 것 입니다.
-- 패키지명 까지 일치 시킬 수는 없기 때문에, DAG 에서 import 경로는 고쳐주어야 할 것 입니다. (한계1)
 
 간단히 예를 들자면, 아래와 같은 provider 설치는 유효할 것입니다.
 
 ```shell
 pip install riir-airflow apache-airflow-providers-apache-flink[cncf.kubernetes]
-# 한계2. apache-airflow-providers-*** 들이 apache-airflow 에 의존성을 가지고 있기에, apache-airflow 와 그 의존성이 설치되는걸 막지는 못 함.
+# apache-airflow-providers-*** 들이 apache-airflow 에 의존성을 가지고 있기에, apache-airflow 와 그 의존성이 설치되는걸 막지는 못 함.
 ```
+
+기존 DAG 를 그대로 쓸 수 있을 것 입니다.
+다만, dag 해석 과정에서 apache-airflow 의 작동을 고려해야만 할 것 입니다.
 
 아래과 같이 수정한 DAG 는 유효할 것 입니다.
 
@@ -31,8 +33,13 @@ pip install riir-airflow apache-airflow-providers-apache-flink[cncf.kubernetes]
 # 즉, 찾아 바꾸기로 from airflow -> from riir_airflow 로 바꾸면 될 것
 ```
 
+위와 같이 수정한 후, 만일 apache-airflow-providers-*** 에 대한 의존이 아예 없다면, apache-airflow 의 동작을 고려할 필요가 없어집니다.
+기존 프로젝트에 이런 변경을 기대하긴 어렵고, 새로 시작하는 프로젝트에 의존성을 최소화 하고 싶을때 생각해 볼 수 있겠습니다.
+
 `airflow.cfg` 와 관련 `AIRFLOW__XXX__XXX` 환경 변수 들은 그대로 사용 가능할 것 입니다.
 몇몇 항목은 후술할 목표에 의해, 의미없는 설정이 될 수 도 있으나, 그러한 설정이 존재해서 작동에 문제가 되진 않을 것 입니다.
+
+현실적으로 apache-airflow 의 모든 디펜던시를 제외하는게 쉽진 않을 것으로, nearly drop-in-replacement 라 할 수 있겠습니다.
 
 ### simplify architecture
 
@@ -171,7 +178,6 @@ airflow 를 만들었어요 라고 할 수 있는 사람이 되면 멋질 것 �
 
 ## limitation
 
-- 패키지명을 덮어쓸 방법을 모르기에, 코드 변경 없이 전환 하는 것은 불가능 합니다. 
 - apache-airflow-providers-*** 들이 apache-airflow 에 의존성을 가지고 있기에, apache-airflow 와 그 의존성이 설치되는걸 막지는 못 함.
 - DAG as a APP 을 위해, dag 파일 layout 이 강제될 것 같으며, AIRFLOW__CORE__DAGS_FOLDER 와 AIRFLOW__CORE__EXECUTOR 를 강제 하게 될 것
 

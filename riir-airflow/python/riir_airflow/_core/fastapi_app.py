@@ -1,3 +1,4 @@
+from pprint import pformat
 from fastapi import FastAPI
 from fastapi.requests import Request
 from airflow.jobs.job import Job
@@ -9,7 +10,6 @@ from contextlib import asynccontextmanager
 
 from riir_airflow._core.scheduler_loop import (
     AsyncSchedulerJobRunner,
-    SchedulerStateDict,
 )
 
 
@@ -51,11 +51,11 @@ def do_not_impl_root():
 
 @web_app.get("/show")
 async def show(req: Request):
-    return req.state._state
+    return dict(out=pformat(req.state._state))
 
 
-@web_app.put("/down")
-async def down(req: Request):
-    scheduler: SchedulerStateDict = req.state.scheduler
-    scheduler["scheduler_on"] = False
-    return req.state._state
+# @web_app.put("/down")
+# async def down(req: Request):
+#     scheduler: SchedulerStateDict = req.state.scheduler
+#     scheduler["scheduler_on"] = False
+#     return req.state._state

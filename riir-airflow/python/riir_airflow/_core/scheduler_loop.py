@@ -14,70 +14,13 @@ from airflow.jobs.job import perform_heartbeat
 from airflow.utils.event_scheduler import EventScheduler
 from airflow.utils.session import create_session
 
-import itertools
-import multiprocessing
-import os
-import signal
-import sys
-import time
-import warnings
-from collections import Counter
-from dataclasses import dataclass
 from datetime import timedelta
-from functools import lru_cache, partial
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Collection, Iterable, Iterator
 
-from sqlalchemy import and_, delete, func, not_, or_, select, text, update
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import lazyload, load_only, make_transient, selectinload
-from sqlalchemy.sql import expression
 
 from airflow import settings
-from airflow.callbacks.callback_requests import (
-    DagCallbackRequest,
-    SlaCallbackRequest,
-    TaskCallbackRequest,
-)
 from airflow.callbacks.pipe_callback_sink import PipeCallbackSink
-from airflow.configuration import conf
-from airflow.exceptions import RemovedInAirflow3Warning
-from airflow.executors.executor_loader import ExecutorLoader
-from airflow.jobs.base_job_runner import BaseJobRunner
-from airflow.jobs.job import Job, perform_heartbeat
-from airflow.models.dag import DAG, DagModel
-from airflow.models.dagbag import DagBag
-from airflow.models.dagrun import DagRun
-from airflow.models.dataset import (
-    DagScheduleDatasetReference,
-    DatasetDagRunQueue,
-    DatasetEvent,
-    DatasetModel,
-    TaskOutletDatasetReference,
-)
-from airflow.models.serialized_dag import SerializedDagModel
-from airflow.models.taskinstance import SimpleTaskInstance, TaskInstance
-from airflow.stats import Stats
-from airflow.ti_deps.dependencies_states import EXECUTION_STATES
-from airflow.timetables.simple import DatasetTriggeredTimetable
+from airflow.models.dag import DAG
 from airflow.utils import timezone
-from airflow.utils.event_scheduler import EventScheduler
-from airflow.utils.log.logging_mixin import LoggingMixin
-from airflow.utils.log.task_context_logger import TaskContextLogger
-from airflow.utils.retries import (
-    MAX_DB_RETRIES,
-    retry_db_transaction,
-    run_with_db_retries,
-)
-from airflow.utils.session import NEW_SESSION, create_session, provide_session
-from airflow.utils.sqlalchemy import (
-    is_lock_not_available_error,
-    prohibit_commit,
-    tuple_in_condition,
-    with_row_locks,
-)
-from airflow.utils.state import DagRunState, JobState, State, TaskInstanceState
-from airflow.utils.types import DagRunType
 
 
 class SchedulerStateDict(TypedDict):
@@ -94,6 +37,9 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
 
     def _run_scheduler_loop(self) -> None:
         return super()._run_scheduler_loop()
+
+    def register_signals(self) -> None:
+        """일단 막음"""
 
     async def __aenter__(self):
         """._execute() 의 앞부분 재현"""

@@ -4,19 +4,14 @@ ifeq ($(VIRTUAL_ENV),)
 $(error VIRTUAL_ENV is not set, please source .venv/bin/activate)
 endif
 
-# Ensure the current commit is on top of a git tag
-GIT_STATUS=$(shell git describe --tags --exact-match 2>/dev/null || echo "not on a tag")
-ifeq ($(GIT_STATUS),not on a tag)
-$(info Current commit is not on a tag. Proceeding.)
-else
-$(info Current commit is on a tag ($(GIT_STATUS)). Proceeding)
-endif
-
 # ENV
 export SQLALCHEMY_SILENCE_UBER_WARNING=1
 export AIRFLOW_HOME=$(VIRTUAL_ENV)/airflow
 export AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
 export AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
+export AIRFLOW__CORE__DAGS_FOLDER=$(shell realpath $(VIRTUAL_ENV)/..)/dags
+export AIRFLOW__CORE__LOAD_EXAMPLES=False
+export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
 
 # Default target
 .PHONY: all

@@ -6,6 +6,8 @@
 #   features: []
 #   all-features: false
 #   with-sources: false
+#   generate-hashes: false
+#   universal: false
 
 -e file:riir-airflow
 aiohttp==3.9.5
@@ -20,7 +22,7 @@ anyio==4.4.0
     # via httpx
     # via starlette
     # via watchfiles
-apache-airflow==2.9.2
+apache-airflow==2.9.3
     # via apache-airflow-providers-common-io
     # via apache-airflow-providers-common-sql
     # via apache-airflow-providers-fab
@@ -32,10 +34,10 @@ apache-airflow==2.9.2
     # via riir-airflow
 apache-airflow-providers-common-io==1.3.2
     # via apache-airflow
-apache-airflow-providers-common-sql==1.14.1
+apache-airflow-providers-common-sql==1.14.2
     # via apache-airflow
     # via apache-airflow-providers-sqlite
-apache-airflow-providers-fab==1.2.0
+apache-airflow-providers-fab==1.2.1
     # via apache-airflow
 apache-airflow-providers-ftp==3.10.0
     # via apache-airflow
@@ -66,7 +68,7 @@ blinker==1.8.2
 cachelib==0.9.0
     # via flask-caching
     # via flask-session
-certifi==2024.6.2
+certifi==2024.7.4
     # via httpcore
     # via httpx
     # via requests
@@ -92,9 +94,9 @@ connexion==2.14.2
     # via apache-airflow
 cron-descriptor==1.4.3
     # via apache-airflow
-croniter==2.0.5
+croniter==3.0.3
     # via apache-airflow
-cryptography==42.0.8
+cryptography==43.0.0
     # via apache-airflow
 deprecated==1.2.14
     # via apache-airflow
@@ -102,6 +104,7 @@ deprecated==1.2.14
     # via opentelemetry-api
     # via opentelemetry-exporter-otlp-proto-grpc
     # via opentelemetry-exporter-otlp-proto-http
+    # via opentelemetry-semantic-conventions
 dill==0.3.8
     # via apache-airflow
 dnspython==2.6.1
@@ -111,7 +114,7 @@ docutils==0.21.2
 email-validator==2.2.0
     # via fastapi
     # via flask-appbuilder
-fastapi==0.111.0
+fastapi==0.111.1
     # via riir-airflow
 fastapi-cli==0.0.4
     # via fastapi
@@ -136,7 +139,7 @@ flask-caching==2.3.0
     # via apache-airflow
 flask-jwt-extended==4.6.0
     # via flask-appbuilder
-flask-limiter==3.7.0
+flask-limiter==3.8.0
     # via flask-appbuilder
 flask-login==0.6.3
     # via apache-airflow-providers-fab
@@ -154,7 +157,7 @@ frozenlist==1.4.1
 fsspec==2024.6.1
     # via apache-airflow
     # via universal-pathlib
-google-re2==1.1.20240601
+google-re2==1.1.20240702
     # via apache-airflow
     # via apache-airflow-providers-fab
 googleapis-common-protos==1.63.2
@@ -162,7 +165,7 @@ googleapis-common-protos==1.63.2
     # via opentelemetry-exporter-otlp-proto-http
 greenlet==3.0.3
     # via sqlalchemy
-grpcio==1.64.1
+grpcio==1.65.1
     # via opentelemetry-exporter-otlp-proto-grpc
 gunicorn==22.0.0
     # via apache-airflow
@@ -182,7 +185,7 @@ idna==3.7
     # via httpx
     # via requests
     # via yarl
-importlib-metadata==7.1.0
+importlib-metadata==8.0.0
     # via opentelemetry-api
 importlib-resources==6.4.0
     # via limits
@@ -201,7 +204,7 @@ jinja2==3.1.4
     # via python-nvd3
 jmespath==1.0.1
     # via apache-airflow-providers-fab
-jsonschema==4.22.0
+jsonschema==4.23.0
     # via apache-airflow
     # via connexion
     # via flask-appbuilder
@@ -247,34 +250,33 @@ more-itertools==10.3.0
 multidict==6.0.5
     # via aiohttp
     # via yarl
-opentelemetry-api==1.25.0
+opentelemetry-api==1.26.0
     # via apache-airflow
     # via opentelemetry-exporter-otlp-proto-grpc
     # via opentelemetry-exporter-otlp-proto-http
     # via opentelemetry-sdk
     # via opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp==1.25.0
+opentelemetry-exporter-otlp==1.26.0
     # via apache-airflow
-opentelemetry-exporter-otlp-proto-common==1.25.0
+opentelemetry-exporter-otlp-proto-common==1.26.0
     # via opentelemetry-exporter-otlp-proto-grpc
     # via opentelemetry-exporter-otlp-proto-http
-opentelemetry-exporter-otlp-proto-grpc==1.25.0
+opentelemetry-exporter-otlp-proto-grpc==1.26.0
     # via opentelemetry-exporter-otlp
-opentelemetry-exporter-otlp-proto-http==1.25.0
+opentelemetry-exporter-otlp-proto-http==1.26.0
     # via opentelemetry-exporter-otlp
-opentelemetry-proto==1.25.0
+opentelemetry-proto==1.26.0
     # via opentelemetry-exporter-otlp-proto-common
     # via opentelemetry-exporter-otlp-proto-grpc
     # via opentelemetry-exporter-otlp-proto-http
-opentelemetry-sdk==1.25.0
+opentelemetry-sdk==1.26.0
     # via opentelemetry-exporter-otlp-proto-grpc
     # via opentelemetry-exporter-otlp-proto-http
-opentelemetry-semantic-conventions==0.46b0
+opentelemetry-semantic-conventions==0.47b0
     # via opentelemetry-sdk
 ordered-set==4.1.0
     # via flask-limiter
-orjson==3.10.5
-    # via fastapi
+orjson==3.10.6
     # via riir-airflow
 packaging==24.1
     # via apache-airflow
@@ -292,17 +294,17 @@ pluggy==1.5.0
     # via apache-airflow
 prison==0.2.1
     # via flask-appbuilder
-protobuf==4.25.3
+protobuf==4.25.4
     # via googleapis-common-protos
     # via opentelemetry-proto
 psutil==6.0.0
     # via apache-airflow
 pycparser==2.22
     # via cffi
-pydantic==2.7.4
+pydantic==2.8.2
     # via fastapi
     # via pydantic-settings
-pydantic-core==2.18.4
+pydantic-core==2.20.1
     # via pydantic
 pydantic-settings==2.3.4
     # via riir-airflow
@@ -359,12 +361,12 @@ rich==13.7.1
     # via typer
 rich-argparse==1.5.2
     # via apache-airflow
-rpds-py==0.18.1
+rpds-py==0.19.1
     # via jsonschema
     # via referencing
 setproctitle==1.3.3
     # via apache-airflow
-setuptools==70.1.1
+setuptools==72.1.0
     # via python-daemon
 sh==2.0.7
     # via riir-airflow
@@ -390,13 +392,13 @@ sqlalchemy-jsonfield==1.0.2
     # via apache-airflow
 sqlalchemy-utils==0.41.2
     # via flask-appbuilder
-sqlparse==0.5.0
+sqlparse==0.5.1
     # via apache-airflow-providers-common-sql
 starlette==0.37.2
     # via fastapi
 tabulate==0.9.0
     # via apache-airflow
-tenacity==8.4.2
+tenacity==9.0.0
     # via apache-airflow
 termcolor==2.4.0
     # via apache-airflow
@@ -420,15 +422,13 @@ tzdata==2024.1
     # via pendulum
 uc-micro-py==1.0.3
     # via linkify-it-py
-ujson==5.10.0
-    # via fastapi
 unicodecsv==0.14.1
     # via apache-airflow
 universal-pathlib==0.2.2
     # via apache-airflow
 urllib3==2.2.2
     # via requests
-uvicorn==0.30.1
+uvicorn==0.30.3
     # via fastapi
 uvloop==0.19.0
     # via uvicorn

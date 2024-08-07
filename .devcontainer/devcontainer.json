@@ -1,0 +1,16 @@
+{
+    "name": "My Codespace",
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.shell.linux": "/bin/zsh"
+            },
+            "extensions": [
+                "charliermarsh.ruff",
+                "ms-vscode-remote.remote-containers",
+                "ms-vscode.makefile-tools",
+                "ms-python.python"
+            ]
+        }
+    }
+}

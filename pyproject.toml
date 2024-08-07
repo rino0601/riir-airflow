@@ -2,7 +2,9 @@
 name = "riir-airflow"
 version = "0.1.0"
 description = "Add your description here"
-dependencies = []
+dependencies = [
+    "fastapi[uvicorn]>=0.112.0",
+]
 readme = "README.md"
 requires-python = ">= 3.12"
 

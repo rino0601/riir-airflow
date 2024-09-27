@@ -1,5 +1,5 @@
 site_name: My Docs
-site_url: https://rino0601.github.io/riit-airflow
+site_url: https://rino0601.github.io/riit-airflow/
 repo_url: https://github.com/rino0601/riir-airflow
 theme:
   name: material
@@ -28,3 +28,7 @@ plugins:
   - blog:
       blog_toc: true
   - search
+
+extra:
+  version:
+    provider: mike

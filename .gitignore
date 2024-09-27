@@ -13,3 +13,6 @@ wheels/
 target/
 # cargo generated files
 *.so
+
+#mkdocs
+site/

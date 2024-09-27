@@ -17,42 +17,42 @@ export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
 .PHONY: all
 all: help
 
-# Install dependencies
-.PHONY: install ensure-node
-$(VIRTUAL_ENV)/include/node: |install
+# setup dependencies
+.PHONY: setup ensure-node
+$(VIRTUAL_ENV)/include/node: |setup
 	nodeenv -p
-install:
-	rye sync --update-all
-	rye run pre-commit install
+setup:
+	uv sync --frozen
+	uv run pre-commit install
 ensure-node: $(VIRTUAL_ENV)/include/node
 
 # Format code
 .PHONY: format format-check
 format:
-	rye format
+	ruff format 
 format-check:
-	rye format --check
+	ruff format --check
 
 # Lint code
 .PHONY: lint lint-fix
 lint:
-	rye lint
+	ruff check
 lint-fix:
-	rye lint --fix
+	ruff check --fix
 
 # Check types with pyright
 .PHONY: type-check
 type-check: ensure-node
-	echo pyright
+	pyright
 
 # Run tests
 .PHONY: test
-test: install format-check lint type-check
+test: setup format-check lint
 	pytest
 
 # Run the application
 .PHONY: run
-run: install
+run: setup
 	riir-airflow standalone
 
 # Clean build artifacts
@@ -69,7 +69,7 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  install               Install dependencies using Rye"
+	@echo "  setup                 setup dependencies using Uv"
 	@echo "  run                   Run the application (airflow standalone)"
 	@echo "  test                  Run tests using pytest"
 	@echo "  format,format-check   Format code"

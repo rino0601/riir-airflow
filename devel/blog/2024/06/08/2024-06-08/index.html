@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/05/06/2024-06-24/">
+        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/06/08/2024-06-08/">
       
       
-        <link rel="prev" href="../2024-06-30/">
+        <link rel="prev" href="../../../05/23/2024-05-23/">
       
       
-        <link rel="next" href="../2024-06-09/">
+        <link rel="next" href="../../09/2024-06-09/">
       
       
       <link rel="icon" href="../../../../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>2024 06 24 - My Docs</title>
+        <title>2024 06 08 - My Docs</title>
       
     
     
@@ -83,6 +83,10 @@
       
     </div>
     
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
     
       
 
@@ -108,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              2024 06 24
+              2024 06 08
             
           </span>
         </div>
@@ -497,7 +501,7 @@
         <li class="md-nav__item">
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
-      메모
+      오늘의 계획
     </span>
   </a>
   
@@ -506,15 +510,6 @@
         <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
-      오늘의 계획
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
       진행
     </span>
   </a>
@@ -522,7 +517,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       결과
     </span>
@@ -567,7 +562,7 @@
                     <li class="md-nav__item">
                       <div class="md-nav__link">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
-                        <time datetime="2024-05-06 00:00:00" class="md-ellipsis">May 6, 2024</time>
+                        <time datetime="2024-06-08 00:00:00" class="md-ellipsis">June 8, 2024</time>
                       </div>
                     </li>
                     
@@ -579,7 +574,7 @@
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
                           <span class="md-ellipsis">
                             
-                              4 min read
+                              1 min read
                             
                           </span>
                         </div>
@@ -602,83 +597,32 @@
   
 
 
-  <h1>2024 06 24</h1>
+  <h1>2024 06 08</h1>
 
-<h2 id="_1">메모</h2>
+<h2 id="_1">오늘의 계획</h2>
 <ul>
-<li><a href="https://news.hada.io/topic?id=15456">메세지 큐 기반 아키텍쳐가 요즘 인기가 떨어지는 이유는?</a> 이란 해커뉴스를 봄<ul>
-<li>Redis가 대부분의 케이스 및 캐싱까지 처리해서 더 이상 별도의 메시지 브로커 운영이 쓸모없어짐. Kafka는 정말 대규모로 가버림.</li>
-<li>DB(광범위하게 봤을때)가 대규모 처리를 훨씬 잘하게 되면서, "일시적인"처리들을 메인 저장소에서 처리하게 됨</li>
-<li>MQ 기반 아키텍처가 기대만큼 잘 작동하지 않는 다는 것을 알아버려서 이제 다른 방식을 사용함</li>
-<li>사실은 이제 MQ 기술이 성숙기에 접어들어서, 사람들이 관련 글을 쓸만큼 흥미롭지는 않음. 하지만 여전히 널리 사용되고 있음</li>
+<li>scheduler loop 화 성공시키기</li>
+<li>다른건 욕심!</li>
 </ul>
-</li>
-<li>요약 스레드 내용은 마지막 의견으로 정리 되는 듯</li>
-<li>하지만 나는 다른 3가지도 일리 있다고 생각한다</li>
-<li>특히 airflow 에 한 해서는, 굳이 메세지 큐를 태울 이유가 없다고 본다.</li>
-</ul>
-<h2 id="_2">오늘의 계획</h2>
+<h2 id="_2">진행</h2>
 <ul>
-<li>WSL1 환경이라서 안되는 거니 다른 환경에서 돌려보자</li>
-<li>회사 컴에서 하는건 쉽지만... 이 레포에 회사컴 묻히기 싫음.</li>
-<li>termux 에서 돌려보자</li>
+<li>오랫만에 재개, 지난번에 완성을 못 했었다. 기억을 되살리는데만 해도 시간이 들 듯</li>
+<li>readme.md 에 써있는 내용으로 시작. 기억과 다르게 스케쥴러의 loop 화는 일단은 이미 성공 했다.</li>
+<li>문제라면 스케쥴링 루프가 곧 작업을 처리하는 코드이기도 하다는 것. 이건 사실 당연한게 uvicorn 이벤트 루프는 단일 프로세스니까....</li>
+<li>작업 자체가 작동하는건 다른 프로세스로 보내버려야 한다.</li>
+<li>sqlite 접근은 uvicorn 이벤트 루프에게 그대로 맡겨야 한다.</li>
+<li>그래야 목표한 sqlite 로 여러 작업 처리 하는 방식이 가능하다..!</li>
+<li>Sequential executor 를 교체해야 할 것 같다는 아이디어가 나옴.</li>
+<li>AsgiExecutor 라는 이름을 만들고, custom executor 설정으로 실행 시킬 수 있음을 확인. (이름 갈이만 함)</li>
+<li>loop.run_in_executor 를 이용해 process pool 로 넘겨야 한다. </li>
+<li>Executing command: ['airflow', 'tasks', 'run', 'example_branch_dop_operator_v3', ... 를 보니 --raw 옵션이 없다. 즉, sqlite 접근을 할 것 이다.</li>
+<li>예전 기억이 맞나 확인해보니 맞다. --raw 옵션을 넣어야 LocalJob 을 안 만든다. db 접근을 안하고 싶다면 --raw 가 필요하다.</li>
 </ul>
-<h2 id="_3">진행</h2>
+<h2 id="_3">결과</h2>
 <ul>
-<li>기억을 되살려서 폰에서 ssh-server 를 띄우는 중...</li>
-<li>이전에 열심히 만들어 뒀던건 userland 내부에서 였단걸 깨달음.</li>
-<li>termux 는 약간 다름</li>
-<li>termux 내 proot 로 만든 ubunut 에서는 어째 잘 안됨...</li>
-<li>중요한거 아니니 무시하고 termux 에서 바로 sshd</li>
-<li>https://wiki.termux.com/wiki/Remote_Access 참고함. 비번은 asdf</li>
-<li>ip 는 고정 안될 텐데 오늘은 신경 쓸 필요 전혀 없음.</li>
-<li>접속 </li>
+<li>불필요한 죽은 코드를 정리했다.</li>
+<li>AsgiExecutor 란걸 만들 필요가 있다는걸 확인했다. 계획을 세웠다.</li>
 </ul>
-<pre><code class="language-sh">[22:58:21.332] &gt; Exec server process not found
-&gt; [2024-06-24 13:58:19] error This machine does not meet Visual Studio Code Server
-&gt; 's prerequisites, expected either...
-&gt;   - find libstdc++.so or ldconfig for GNU environments
-&gt;   - find /lib/ld-musl-aarch64.so.1, which is required to run the Visual Studio C
-&gt; ode Server in musl environments
-[22:58:21.347] &gt; 
-[22:58:21.362] &gt; 6b5b59277f5d: s
-</code></pre>
-<p>vscode Remote:Host 는 불가함.</p>
-<p>code-server 를 설치하고 localhost:xxxx 로 접근해보자</p>
-<p>termux 에서 곧바로 하니 실패함.</p>
-<pre><code>+ tar -C ~/.local/lib -xzf ~/.cache/code-server/code-server-4.90.3-linux-arm64.tar.gz
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/native-watchdog/build/Release/watchdog.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/native-watchdog/build/Release/obj.target/watchdog.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/kerberos/build/Release/kerberos.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/kerberos/build/Release/obj.target/kerberos.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-process-tree/build/Release/windows_process_tree.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-process-tree/build/Release/obj.target/windows_process_tree.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/spdlog/build/Release/obj.target/spdlog.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/spdlog/build/Release/spdlog.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-registry/build/Release/winregistry.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-registry/build/Release/obj.target/winregistry.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/deviceid/build/Release/windows.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/deviceid/build/Release/obj.target/windows.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/nothing.a: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/obj.target/node_modules/node-addon-api/nothing.a’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/watcher.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/obj.target/watcher.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/obj.target/argon2.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/lib/binding/napi-v3/argon2.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/argon2.a: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/obj.target/argon2.a’: Permission denied
-tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/argon2.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/lib/binding/napi-v3/argon2.node’: Permission denied
-tar: Exiting with failure status due to previous errors
-</code></pre>
-<p>proot 상태에서 해보자</p>
-<h2 id="_4">결과</h2>
-<pre><code class="language-sh"># termux 켜기, 메뉴얼하게 sshd 열기
-sshd
-# 접속 방법 확인
-whoami &amp;&amp; ifconfig
-
-# ssh -p 8022  한 후, code-server 설치
-proot-distro login ubuntu
-curl -fsSL https://code-server.dev/install.sh | sh
-# 비번 확인
-cat  /root/.config/code-server/config.yaml
-# 구동
-code-server --bind-addr 0.0.0.0:8081
-</code></pre>
-<p>기대대로 잘 된다는 것을 확인 했다.
-장비가 느려서 그리고 sqlite 라서 동시성이 강제로 1로 떨어졌기 때문에 느리게 반응했지만,
-작업이 작동하는 사이에도 웹서버는 반응 했다.</p>
-<p>다만 작업이 한참 진행 중이라면, scheduler heartbeat 는 갱신하지 못 했다.</p>
 
 
 
@@ -730,7 +674,7 @@ code-server --bind-addr 0.0.0.0:8081
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
       <script src="../../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>

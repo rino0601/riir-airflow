@@ -83,6 +83,10 @@
       
     </div>
     
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
     
       
 
@@ -420,9 +424,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#2024-07-29" class="md-nav__link">
+  <a href="#2024-05-06" class="md-nav__link">
     <span class="md-ellipsis">
-      2024 07 29
+      2024 05 06
     </span>
   </a>
   
@@ -540,9 +544,9 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#2024-07-29" class="md-nav__link">
+  <a href="#2024-05-06" class="md-nav__link">
     <span class="md-ellipsis">
-      2024 07 29
+      2024 05 06
     </span>
   </a>
   
@@ -584,22 +588,27 @@
     </div>
   </header>
   <div class="md-post__content md-typeset">
-    <h2 id="2024-07-29"><a class="toclink" href="../../2024/05/06/2024-07-29/">2024 07 29</a></h2>
-<h3 id="_1"><a class="toclink" href="../../2024/05/06/2024-07-29/#_1">오늘의 계획</a></h3>
+    <h2 id="2024-05-06"><a class="toclink" href="../../2024/05/06/2024-05-06/">2024 05 06</a></h2>
 <ul>
-<li>한달만의 재개. 길게 할 수도 없고, README 갱신 정도를 목표로 하자.</li>
-<li>하는 김에, examples 를 끄고, 이 프로젝트의 DAG 를 보게 하자.</li>
+<li>2024-05-05 부터 시작해, 아이디어를 모두 정리하여 README.md 를 작성.</li>
+<li>전부터 생각만 하던, FastAPI에 airflow webserver 를 mount 해서 기동하면 어떨까? 를 실현. 생각보다 매끄럽게 잘 되서 놀랐다.</li>
+<li>당장의 목표는 airflow standalone 명령의 재현으로, 각 컴포넌트는 개별 subprocess 로 만들어질 듯 싶다.</li>
+<li>가급적 asyncio 만 쓰고 싶었는데, polling 처리가 너무 어렵다. sh 를 쓴다.</li>
+<li>그러나 그렇게 되면, sqlite 의 thread 접근을 따져가면서 사용해야 하므로 불편하다. 궁국적으로는 scheduler, worker, triggerer, dagparser 등을 asyncio 안에 녹여내어야 할 것이다.</li>
+<li>그러면, uvicorn 워커가 늘어나면 어떻게 됨? 이란 질문이 생길 수 있는데, 늘리는데에 있어서 장점이 없다. 라고 할 수 있겠다.</li>
+<li>어떻게 작동시키는데는 성공했고, WSL1 의 제약 때문에 (마치 NFS 에 있는 sqlite 를 쓰는데 문제가 있듯) sqlite 가 동시 접근을 당하자 프로세스가 죽어버렸다.</li>
+<li>이 문제 해결을 위해서라도 스케쥴링 로직을 async 하게 고쳐야 한다.</li>
+<li>triggerer 는 async 를 쓸테니, async 한 db 접근자가 있을 것이라 가정하고 코드를 따라가 보았다.<ul>
+<li>그러지 않았다.</li>
+<li>job runner 가 이벤트 루프를 위한 Tread 를 하나 만든다. 그 안에서 asyncio.run() 한다. </li>
+<li>job runner의 메인 스레드와 asyncio 를 위한 스레드는 프로세스 분기가 아니라 스레드 분기이므로, 값을 주고 받을 수 있다.</li>
+<li>job runner의 메인 스레드가 루프를 돌아 db에서 값을 만들어 열심히 deque 를 채우면, asyncio 루프에서 열심히 소비한다.</li>
 </ul>
-<h3 id="_2"><a class="toclink" href="../../2024/05/06/2024-07-29/#_2">진행</a></h3>
-<p>지난번에 branch protection 을 걸었으니 브랜치를 만들며 시작.</p>
-<p>https://stackoverflow.com/questions/72929081/what-is-github-contributing-md-for
-그리고
-https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/setting-guidelines-for-repository-contributors 를 GPT의 도움을 받아 찾아냄.</p>
-<p>개발환경 셋업 가이드는 .github/CONTRIBUTING.md 에 작성하기로 결정.</p>
-<p>2023년 어느 시점엔가 (default-pre2.7 이란걸 보아 2.8부터 인듯?), airflow 가 설정의 근원을 더 세세하게 (provider 내장 설정 등등) 구분한다는 점을 발견함.</p>
-<h3 id="_3"><a class="toclink" href="../../2024/05/06/2024-07-29/#_3">결과</a></h3>
-<p>약간의 makefile 수정을 포함해서 의도대로 잘 진행 되었다.
-생각보다 시간은 더 많이 씀.</p>
+</li>
+<li>즉, 이 구조는 일단 멀티 스레드이다. WSL의 sqlite 동시성 극복으로는 쓸 수 없다.</li>
+<li>네이티브하게 async 하고 싶다면, sqlalchemy 부터 어떻게 해야 한다.</li>
+<li>sqlalchemy==1.4.52 로, async API 가 존재는 한다. 그러나 이게 쓸 수 있다는 얘기는 아니다...</li>
+</ul>
     
   </div>
 </article>
@@ -648,7 +657,7 @@ https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contr
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tabs"], "search": "../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.tabs"], "search": "../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
       <script src="../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>

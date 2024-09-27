@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/05/06/2024-06-09/">
+        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/07/29/2024-07-29/">
       
       
-        <link rel="prev" href="../2024-06-24/">
+        <link rel="prev" href="../../../06/30/2024-06-30/">
       
       
-        <link rel="next" href="../2024-06-08/">
+        <link rel="next" href="../../../08/07/2024-08-07/">
       
       
       <link rel="icon" href="../../../../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>2024 06 09 - My Docs</title>
+        <title>2024 07 29 - My Docs</title>
       
     
     
@@ -83,6 +83,10 @@
       
     </div>
     
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
     
       
 
@@ -108,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              2024 06 09
+              2024 07 29
             
           </span>
         </div>
@@ -558,7 +562,7 @@
                     <li class="md-nav__item">
                       <div class="md-nav__link">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
-                        <time datetime="2024-05-06 00:00:00" class="md-ellipsis">May 6, 2024</time>
+                        <time datetime="2024-07-29 00:00:00" class="md-ellipsis">July 29, 2024</time>
                       </div>
                     </li>
                     
@@ -593,39 +597,23 @@
   
 
 
-  <h1>2024 06 09</h1>
+  <h1>2024 07 29</h1>
 
 <h2 id="_1">오늘의 계획</h2>
 <ul>
-<li>AsgiExecutor 를 await 하기!</li>
-<li>다른건 욕심!</li>
+<li>한달만의 재개. 길게 할 수도 없고, README 갱신 정도를 목표로 하자.</li>
+<li>하는 김에, examples 를 끄고, 이 프로젝트의 DAG 를 보게 하자.</li>
 </ul>
 <h2 id="_2">진행</h2>
-<ul>
-<li>--raw 옵션은 신경쓰지 않고 일단 작업해봄</li>
-<li>--local 을 제꼈더니...</li>
-</ul>
-<pre><code>[SQL: UPDATE task_instance SET state=?, queued_by_job_id=?, updated_at=? WHERE task_instance.dag_id = ? AND task_instance.task_id = ? AND task_instance.run_id = ? AND task_instance.map_index = ?]
-[parameters: ((None, None, '2024-06-09 14:33:04.563888', 'example_sla_dag', 'sleep_20', 'scheduled__2024-06-09T14:08:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563891', 'example_sla_dag', 'sleep_20', 'scheduled__2024-06-09T14:10:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563893', 'example_sla_dag', 'sleep_30', 'scheduled__2024-06-09T14:20:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563894', 'example_sla_dag', 'sleep_30', 'scheduled__2024-06-09T14:22:00+00:00', -1))]
-(Background on this error at: https://sqlalche.me/e/14/4xp6) (Background on this error at: https://sqlalche.me/e/14/7s2a)
-</code></pre>
-<p>job 이 생성 안되었기 때문에, sql 이 실패한다.
-job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
-<p>WSL1 에서의 sqlite3 까지 지원하는건 너무 어려운 목표일까?</p>
-<p>로컬에 적당한 db 를 만들고 (redis sql 해볼까..? 이것도 에바인가?)</p>
+<p>지난번에 branch protection 을 걸었으니 브랜치를 만들며 시작.</p>
+<p>https://stackoverflow.com/questions/72929081/what-is-github-contributing-md-for
+그리고
+https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contributions/setting-guidelines-for-repository-contributors 를 GPT의 도움을 받아 찾아냄.</p>
+<p>개발환경 셋업 가이드는 .github/CONTRIBUTING.md 에 작성하기로 결정.</p>
+<p>2023년 어느 시점엔가 (default-pre2.7 이란걸 보아 2.8부터 인듯?), airflow 가 설정의 근원을 더 세세하게 (provider 내장 설정 등등) 구분한다는 점을 발견함.</p>
 <h2 id="_3">결과</h2>
-<ul>
-<li>WSL1 에서의 sqlite3 지원을 위해 airflow 의 모든 db 접근을 이벤트루프에게만 맡기는건 아직은 어렵다.<ul>
-<li>관련한 AIP 가 있었던 것 같은데...</li>
-</ul>
-</li>
-<li>그 목표를 포기하자면 db 셋업이 필요하다.<ul>
-<li>pip 로는 설치시키기 까다롭고..</li>
-<li>따로 셋업 절차 만들긴 싫은데...</li>
-<li>rust..?</li>
-</ul>
-</li>
-</ul>
+<p>약간의 makefile 수정을 포함해서 의도대로 잘 진행 되었다.
+생각보다 시간은 더 많이 씀.</p>
 
 
 
@@ -677,7 +665,7 @@ job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
       <script src="../../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>

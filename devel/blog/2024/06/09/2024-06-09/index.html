@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/05/06/2024-06-30/">
+        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/06/09/2024-06-09/">
       
       
-        <link rel="prev" href="../2024-07-29/">
+        <link rel="prev" href="../../08/2024-06-08/">
       
       
-        <link rel="next" href="../2024-06-24/">
+        <link rel="next" href="../../24/2024-06-24/">
       
       
       <link rel="icon" href="../../../../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>2024 06 30 - My Docs</title>
+        <title>2024 06 09 - My Docs</title>
       
     
     
@@ -83,6 +83,10 @@
       
     </div>
     
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
     
       
 
@@ -108,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              2024 06 30
+              2024 06 09
             
           </span>
         </div>
@@ -497,7 +501,7 @@
         <li class="md-nav__item">
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
-      메모
+      오늘의 계획
     </span>
   </a>
   
@@ -506,15 +510,6 @@
         <li class="md-nav__item">
   <a href="#_2" class="md-nav__link">
     <span class="md-ellipsis">
-      오늘의 계획
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
-    <span class="md-ellipsis">
       진행
     </span>
   </a>
@@ -522,7 +517,7 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
       결과
     </span>
@@ -567,7 +562,7 @@
                     <li class="md-nav__item">
                       <div class="md-nav__link">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
-                        <time datetime="2024-05-06 00:00:00" class="md-ellipsis">May 6, 2024</time>
+                        <time datetime="2024-06-09 00:00:00" class="md-ellipsis">June 9, 2024</time>
                       </div>
                     </li>
                     
@@ -579,7 +574,7 @@
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
                           <span class="md-ellipsis">
                             
-                              2 min read
+                              1 min read
                             
                           </span>
                         </div>
@@ -602,77 +597,36 @@
   
 
 
-  <h1>2024 06 30</h1>
+  <h1>2024 06 09</h1>
 
-<h2 id="_1">메모</h2>
+<h2 id="_1">오늘의 계획</h2>
 <ul>
-<li>WSL1 환경에서 개발은 정말 어렵다. sqlite3 가 봉인된다고 봐야 함.</li>
-<li>다른 환경을 알아보거나 sqlite3 에 의존하지 않아야 한다.</li>
-<li>다른 환경 알아보기는 경제적인 문제해결 방법이 필요하다</li>
-<li>sqlite3 의존 피하기는, 딱히 돈은 안들고, 개인 여가 시간만 쓰면 되나, 옳은 선택인가..?? 싶어진다. </li>
+<li>AsgiExecutor 를 await 하기!</li>
+<li>다른건 욕심!</li>
 </ul>
-<h2 id="_2">오늘의 계획</h2>
+<h2 id="_2">진행</h2>
 <ul>
-<li>당분간 WSL1 환경을 유지해야 한다.</li>
-<li>매번 재개 할 때 마다 기동법을 다시 찾으라 5분씩 쓰니 기동법을 공고히 하자.</li>
-<li><code>make run</code> 을 만들자.<ul>
-<li>[x] makefile 작성</li>
-<li>[x] .github/workflow 작성</li>
-<li>[x] branch project 설정</li>
+<li>--raw 옵션은 신경쓰지 않고 일단 작업해봄</li>
+<li>--local 을 제꼈더니...</li>
 </ul>
-</li>
-</ul>
-<h2 id="_3">진행</h2>
-<p>branch project 설정부터 진행 했다.
-rulsets 라고 신 기능이 생긴모양? 2분 정도 어색하긴 했는데, 전 보다 훨씬 쓰기 편해진것으로 보임.</p>
-<p>적용후, main 에 push 하여 설정된걸 확인.</p>
-<pre><code>riir-airflow➜  riir-airflow git:(main) gp
-Enumerating objects: 5, done.
-Counting objects: 100% (5/5), done.
-Delta compression using up to 32 threads
-Compressing objects: 100% (3/3), done.
-Writing objects: 100% (3/3), 307 bytes | 307.00 KiB/s, done.
-Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
-remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
-remote: error: GH013: Repository rule violations found for refs/heads/main.
-remote: Review all repository rules at http://github.com/rino0601/riir-airflow/rules?ref=refs%2Fheads%2Fmain
-remote: 
-remote: - Changes must be made through a pull request.
-remote: 
-To github.com:rino0601/riir-airflow.git
- ! [remote rejected] main -&gt; main (push declined due to repository rule violations)
-error: failed to push some refs to 'github.com:rino0601/riir-airflow.git'
-riir-airflow➜  riir-airflow git:(main) glog
-riir-airflow➜  riir-airflow git:(main) git reset f600975
+<pre><code>[SQL: UPDATE task_instance SET state=?, queued_by_job_id=?, updated_at=? WHERE task_instance.dag_id = ? AND task_instance.task_id = ? AND task_instance.run_id = ? AND task_instance.map_index = ?]
+[parameters: ((None, None, '2024-06-09 14:33:04.563888', 'example_sla_dag', 'sleep_20', 'scheduled__2024-06-09T14:08:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563891', 'example_sla_dag', 'sleep_20', 'scheduled__2024-06-09T14:10:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563893', 'example_sla_dag', 'sleep_30', 'scheduled__2024-06-09T14:20:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563894', 'example_sla_dag', 'sleep_30', 'scheduled__2024-06-09T14:22:00+00:00', -1))]
+(Background on this error at: https://sqlalche.me/e/14/4xp6) (Background on this error at: https://sqlalche.me/e/14/7s2a)
 </code></pre>
-<p>회사 업무때 했던건데, cccv 못 하니까 너무 불편하고 힘들다...
-이렇게 내것으로 만드는 것이겠지.</p>
-<p>키보드 느낌 달라서 불편한 점도 많이 있는 듯
-집 컴 키보드는 게임할 땐 충분하지만, 타이핑 많아지면 시끄럽고 불편하다</p>
-<p>make -C subdir 할때 export 해둔 환경 변수를 전달 하는 방법을 모르겠다. 그냥 subdir make 를 포기함.</p>
-<p>pre-commit 설정을 진행 했고, 아직 코드가 적어서 fmt, lint 등으로 인한 변경은 적었다.
-pyright 도 걸었는데, 이건 좀 많네;</p>
-<p>유닛 테스트 적어놓은게 깨져있던걸 발견함. 살릴 방법이 마땅치 않아서 일단 성공하게 조건을 많이 풀어 둠.</p>
-<p>멀쩡한 유닛테스트는 다음 목표로 삼아야 하겠다.</p>
-<h2 id="_4">결과</h2>
+<p>job 이 생성 안되었기 때문에, sql 이 실패한다.
+job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
+<p>WSL1 에서의 sqlite3 까지 지원하는건 너무 어려운 목표일까?</p>
+<p>로컬에 적당한 db 를 만들고 (redis sql 해볼까..? 이것도 에바인가?)</p>
+<h2 id="_3">결과</h2>
 <ul>
-<li>make run 으로 개발 모드로 띄울 수 있게 되었다. 목표 달성.</li>
-<li>pre-commit 으로 fmt, lint 등을 적용하게 되었다. 목표 달성.</li>
-<li>
-<p>.github/worflow 를 적용했다. 잘 작동한다. 목표 달성.</p>
-</li>
-<li>
-<p>make run 취소시 ctrl^C 를 두번해야 한다. 사소한 이슈 발견.</p>
-</li>
-<li>README.md 에 이번에 작업한 내용이 적혀 있지 않다. 근데 너무 지침. 다음으로 미룬다.</li>
-<li>이제 PR 을 쌓기로 결정하면서, 이 blog 가 불편해질 수 있다. PR 메세지로 옮겨야 할까? 고민.<ul>
-<li>협업자가 등장하면, 그 사람의 의견을 들어야 하겠지. (방해된다는 확정적. (일기니까...!) 어떻게 대체할지를 의견을 구해야...)</li>
+<li>WSL1 에서의 sqlite3 지원을 위해 airflow 의 모든 db 접근을 이벤트루프에게만 맡기는건 아직은 어렵다.<ul>
+<li>관련한 AIP 가 있었던 것 같은데...</li>
 </ul>
 </li>
-<li>유닛 테스트, 타입 테스트에 대해, 조건은 걸었지만, 작동은 하고 있지 않다. 다음에 챙겨볼 것</li>
-<li>미룬 과제 제외하고 다음 목표?<ul>
-<li>기존 컴포넌트를 모두 evventloop 로 표현해보자. 현재 scheduler 만 loop 로 표현되어 있다.</li>
-<li>이후 rust 로 바꾸기 용이해 질 것 같음.</li>
+<li>그 목표를 포기하자면 db 셋업이 필요하다.<ul>
+<li>pip 로는 설치시키기 까다롭고..</li>
+<li>따로 셋업 절차 만들긴 싫은데...</li>
+<li>rust..?</li>
 </ul>
 </li>
 </ul>
@@ -727,7 +681,7 @@ pyright 도 걸었는데, 이건 좀 많네;</p>
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
       <script src="../../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>

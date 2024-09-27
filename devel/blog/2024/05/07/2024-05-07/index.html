@@ -8,13 +8,13 @@
       
       
       
-        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/05/06/2024-05-13/">
+        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/05/07/2024-05-07/">
       
       
-        <link rel="prev" href="../2024-06-08/">
+        <link rel="prev" href="../../06/2024-05-06/">
       
       
-        <link rel="next" href="../2024-05-11/">
+        <link rel="next" href="../../11/2024-05-11/">
       
       
       <link rel="icon" href="../../../../../assets/images/favicon.png">
@@ -22,7 +22,7 @@
     
     
       
-        <title>2024 05 13 - My Docs</title>
+        <title>2024 05 07 - My Docs</title>
       
     
     
@@ -83,6 +83,10 @@
       
     </div>
     
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
     
       
 
@@ -108,7 +112,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              2024 05 13
+              2024 05 07
             
           </span>
         </div>
@@ -515,16 +519,7 @@
         <li class="md-nav__item">
   <a href="#_3" class="md-nav__link">
     <span class="md-ellipsis">
-      그럼 뭐가 달라지는데?
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
-    <span class="md-ellipsis">
-      조금만 더?
+      오늘의 결론
     </span>
   </a>
   
@@ -567,7 +562,7 @@
                     <li class="md-nav__item">
                       <div class="md-nav__link">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
-                        <time datetime="2024-05-06 00:00:00" class="md-ellipsis">May 6, 2024</time>
+                        <time datetime="2024-05-07 00:00:00" class="md-ellipsis">May 7, 2024</time>
                       </div>
                     </li>
                     
@@ -602,26 +597,27 @@
   
 
 
-  <h1>2024 05 13</h1>
+  <h1>2024 05 07</h1>
 
 <h2 id="_1">오늘의 계획</h2>
 <ul>
-<li>7일날 찾아두었던 state 를 갱신하는 뤂프를, unittest 할 수 있는지 확인하자.</li>
+<li>스케쥴러 프로세스를 이벤트 루프로 변환 할 수 있는지에 대한 간단한 검증 시작</li>
+<li>state 에 flag 를 넣고 무한 루프를 돌리자. flag 가 변하면 루프를 끝내자.</li>
+<li>flag 를 fastapi 에서 조회/변조 할 수 있는지 시험해보자.</li>
 </ul>
 <h2 id="_2">해봤다!</h2>
-<p>심플하게- 된다!</p>
-<p>BackgroundTask 와는 다르게 uvicorn 도움 따위 필요없다.</p>
-<h2 id="_3">그럼 뭐가 달라지는데?</h2>
+<p><code>state 에 flag 를 넣고 무한 루프를 돌리자. flag 가 변하면 루프를 끝내자.</code>
+lifespan 내에서 처리하니까 되긴 한다. 즉, 적-절한 옵션이 함께 한다면 가능은 하다!</p>
+<p><code>flag 를 fastapi 에서 조회/변조 할 수 있는지 시험해보자.</code>
+이건 한번에 달성 할 수 없었다. 값을 변경하려는 시도는 잘 작동하지 않았다.
+ASGI 스펙을 다시 읽어보니 state 는 전적으로 application 의 제어에 있으며, server는 얕은 복사만 수행한다고 되어 있다.
+그렇다면 dict of dict 하면 변조가 된다는 얘기렸다? -&gt; 된다.</p>
+<h2 id="_3">오늘의 결론</h2>
 <ul>
-<li>회사에서 쓰는 supervisord-Ofelia-CeleryTask 라는 고작 로그 파일 쌓인걸 지우기 위해 하는 것 치고는 너무 과하게 복잡한 부분을 지워버릴 수 있다!</li>
-<li>회사에서 쓰는 BackgroundTask 로 state 머신 만들어서 작업 종료 시키기... 부분을 개선 할 수 있다. 현재 tick 으로 livenessProbe 에 의존하는 괴상한 모양인데, 그럴 필요 없다!</li>
+<li>job runner 를 잘 다듬으면 이벤트 루프로 변환 시킬 수 있다.</li>
+<li>그렇게 만든 새 루프와 메인 루틴의 통신은 변수로 가능하다. (같은 프로세스의 같은 스레드 이므로)</li>
+<li>한번 끄면 다시 켜는건 어려울 것 같다. pause 가 아니라 kill 이라 이름지어야 하겠다.</li>
 </ul>
-<h2 id="_4">조금만 더?</h2>
-<ul>
-<li>_core 디렉토리로 지금까지 알아낸 구조를 옮겨넣자.</li>
-</ul>
-<p>너무 욕심냈다. 늦게 잠들기 전에 그만 둠.</p>
-<p>어느 정도 말이 되는 방법인것 같다는 느낌을 받았음.</p>
 
 
 
@@ -673,7 +669,7 @@
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
       <script src="../../../../../assets/javascripts/bundle.d6f25eb3.min.js"></script>

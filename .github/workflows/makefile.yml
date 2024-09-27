@@ -8,13 +8,11 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
     - uses: actions-rust-lang/setup-rust-toolchain@v1
-    - name: Python Setup Rye
-      uses: eifinger/setup-rye@v3    
     - name: Do Make
-      run: rye run make test
+      run: uv run make test

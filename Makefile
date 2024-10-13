@@ -50,6 +50,12 @@ type-check: ensure-node
 test: setup format-check lint
 	pytest
 
+.PHONY: docs docs-check
+docs:
+	mkdocs serve
+docs-check:
+	mkdocs build --strict
+
 # Run the application
 .PHONY: run
 run: setup

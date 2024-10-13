@@ -22,6 +22,13 @@ make
 
 그외 다른 사용법은 `uv run make` 하면 설명이 기재되어 있습니다.
 
+
+추천 git 설정
+```sh
+git config --global pull.rebase true
+git config --global core.editor "vim"
+```
+
 ### .devcontainer/
 
 > https://containers.dev/ 문서를 보고 가꾸어 나갈 것

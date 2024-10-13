@@ -26,7 +26,7 @@ make
 추천 git 설정
 ```sh
 git config --global pull.rebase true
-git config --global core.editor "vim"
+git config --global core.editor "vim"  # codespace 에서는 기본 환경변수 GIT_EDITOR 가 code --wait 여서 바로 적용되지 않음. unset GIT_EDITOR 또는 환경변수 조작 필요
 ```
 
 ### .devcontainer/

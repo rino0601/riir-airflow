@@ -16,3 +16,6 @@ target/
 
 #mkdocs
 site/
+
+# erl
+erl_crash.dump

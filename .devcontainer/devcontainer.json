@@ -12,5 +12,8 @@
                 "ms-python.python"
             ]
         }
+    },
+    "remoteEnv": {
+        "GIT_EDITOR": "vim"
     }
 }

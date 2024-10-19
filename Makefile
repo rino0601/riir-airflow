@@ -67,7 +67,7 @@ clean:
 	rm -rf .ruff_cache .pytest_cache \
 		$(VIRTUAL_ENV)/airflow
 clean-hard: clean
-	rye sync -f
+	rm -rf $(VIRTUAL_ENV)
 
 # Show help message
 .PHONY: help

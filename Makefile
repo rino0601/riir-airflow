@@ -78,7 +78,7 @@ build: setup
 # Run the application
 .PHONY: run
 run: setup
-	riir-airflow standalone
+	airflow standalone
 
 # Clean build artifacts
 .PHONY: clean clean-hard

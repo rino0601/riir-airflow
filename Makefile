@@ -13,17 +13,30 @@ export AIRFLOW__CORE__DAGS_FOLDER=$(shell realpath $(VIRTUAL_ENV)/..)/dags
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
 export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
 
-# Default target
-.PHONY: all
-all: help
+# Default target (1st)
+# Show help message
+.PHONY: help
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  setup                 setup dependencies using Uv"
+	@echo "  run                   Run the application (airflow standalone)"
+	@echo "  test                  Run tests using pytest"
+	@echo "  format,format-check   Format code"
+	@echo "  lint,lint-fix         Lint code"
+	@echo "  type-check            Check types using pyright"
+	@echo "  clean,clean-hard      Clean build artifacts"
+	@echo "  help                  Show this help message"
 
 # setup dependencies
 .PHONY: setup ensure-node
-$(VIRTUAL_ENV)/include/node: |setup
-	nodeenv -p
 setup:
 	uv sync --frozen
 	uv run pre-commit install
+
+$(VIRTUAL_ENV)/include/node: |setup
+	nodeenv -p
 ensure-node: $(VIRTUAL_ENV)/include/node
 
 # Format code
@@ -47,14 +60,18 @@ type-check: ensure-node
 
 # Run tests
 .PHONY: test
-test: setup format-check lint
+test: setup
 	pytest
 
 .PHONY: docs docs-check
-docs:
+docs: setup
 	mkdocs serve
-docs-check:
+docs-check: setup
 	mkdocs build --strict
+
+.PHONY: build
+build: setup
+	uv build .
 
 # Run the application
 .PHONY: run
@@ -68,18 +85,3 @@ clean:
 		$(VIRTUAL_ENV)/airflow
 clean-hard: clean
 	rm -rf $(VIRTUAL_ENV)
-
-# Show help message
-.PHONY: help
-help:
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Targets:"
-	@echo "  setup                 setup dependencies using Uv"
-	@echo "  run                   Run the application (airflow standalone)"
-	@echo "  test                  Run tests using pytest"
-	@echo "  format,format-check   Format code"
-	@echo "  lint,lint-fix         Lint code"
-	@echo "  type-check            Check types using pyright"
-	@echo "  clean,clean-hard      Clean build artifacts"
-	@echo "  help                  Show this help message"

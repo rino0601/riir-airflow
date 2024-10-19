@@ -7,9 +7,33 @@ repos:
         args: [--assume-in-merge]
   - repo: local
     hooks:
-      - id: make
+      - id: formt
+        name: make formt
+        entry: make format
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: lint-fix
+        name: make lint-fix
+        entry: make lint-fix
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: docs-check
+        name: make docs-check
+        entry: make docs-check
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: test
         name: make test
-        entry: make format lint-fix test
+        entry: make test
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: build
+        name: make build
+        entry: make build
         language: system
         pass_filenames: false
         always_run: true

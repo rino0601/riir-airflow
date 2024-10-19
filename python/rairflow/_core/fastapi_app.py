@@ -8,7 +8,7 @@ from fastapi.responses import ORJSONResponse
 
 from contextlib import asynccontextmanager
 
-from riir_airflow._core.scheduler_loop import (
+from rairflow._core.scheduler_loop import (
     AsyncSchedulerJobRunner,
 )
 

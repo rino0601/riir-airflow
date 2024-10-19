@@ -8,7 +8,7 @@ endif
 export SQLALCHEMY_SILENCE_UBER_WARNING=1
 export AIRFLOW_HOME=$(VIRTUAL_ENV)/airflow
 export AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
-export AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
+# export AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
 export AIRFLOW__CORE__DAGS_FOLDER=$(shell realpath $(VIRTUAL_ENV)/..)/dags
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
 export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
@@ -34,6 +34,8 @@ help:
 setup:
 	uv sync --frozen
 	uv run pre-commit install
+update-all:
+	uv sync --all-extras --upgrade
 
 $(VIRTUAL_ENV)/include/node: |setup
 	nodeenv -p

@@ -4,7 +4,10 @@ from airflow.utils import db
 from airflow.www.app import cached_app
 from fastapi.middleware.wsgi import WSGIMiddleware
 
-from riir_airflow._core.fastapi_app import web_app
+from rairflow._core.fastapi_app import web_app
+from .settings import RiiRAFSettings
+
+settings = RiiRAFSettings()
 
 
 cli_app = typer.Typer()

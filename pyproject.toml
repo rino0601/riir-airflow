@@ -12,6 +12,7 @@ dependencies = [
     "apache-airflow>=2.9.1",
     "sh>=2.0.6",
     "orjson>=3.10.3",
+    "pydantic-extra-types>=2.9.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"

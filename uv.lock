@@ -1971,6 +1971,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pydantic-extra-types"
+version = "2.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fb/95/d61dcadd933cb34461adc271c13bbe14a7080b9922b9e0dc3c1d18b421cb/pydantic_extra_types-2.9.0.tar.gz", hash = "sha256:e061c01636188743bb69f368dcd391f327b8cfbfede2fe1cbb1211b06601ba3b", size = 39578 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/37/2f/efc4877d1a1536ec76ca0114c3e9dee7d0a10a262c53d384d50163f5684c/pydantic_extra_types-2.9.0-py3-none-any.whl", hash = "sha256:f0bb975508572ba7bf3390b7337807588463b7248587e69f43b1ad7c797530d0", size = 30544 },
+]
+
+[[package]]
 name = "pydantic-settings"
 version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2287,6 +2299,7 @@ dependencies = [
     { name = "apache-airflow" },
     { name = "fastapi", extra = ["standard"] },
     { name = "orjson" },
+    { name = "pydantic-extra-types" },
     { name = "pydantic-settings" },
     { name = "sh" },
 ]
@@ -2309,6 +2322,7 @@ requires-dist = [
     { name = "apache-airflow", specifier = ">=2.9.1" },
     { name = "fastapi", extras = ["standard"], specifier = ">=0.112.0" },
     { name = "orjson", specifier = ">=3.10.3" },
+    { name = "pydantic-extra-types", specifier = ">=2.9.0" },
     { name = "pydantic-settings", specifier = ">=2.2.1" },
     { name = "sh", specifier = ">=2.0.6" },
 ]

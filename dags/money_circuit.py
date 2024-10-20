@@ -1,8 +1,8 @@
+from datetime import timedelta
 from enum import Enum
-from typing import Self
+from typing import Self, NewType, cast
 
 import pendulum
-from pendulum.datetime import DateTime
 
 from airflow import DAG
 from airflow.decorators import dag, task
@@ -12,11 +12,14 @@ from airflow.models.variable import Variable
 from airflow.models.param import Param
 from airflow.utils.types import NOTSET
 from pydantic import BaseModel, Field, computed_field
+from pydantic_extra_types.pendulum_dt import DateTime
 import math
 
 TARGET_BUFFER_RATIO: float = 3.0
 UPPER_BASE_UNIT_WON: int = 10_0000
 START_DATE: DateTime = pendulum.datetime(2024, 8, 1, tz="Asia/Seoul")
+
+BankAccountKey = NewType("BankAccountKey", str)
 
 
 def ceil(x, s):
@@ -24,28 +27,40 @@ def ceil(x, s):
 
 
 def field2params(model: BaseModel, field_name: str, default_value=None) -> Param:
-    value = default_value or NOTSET
-    match model.model_fields[field_name]:
+    from pydantic_core import PydanticUndefined
+
+    field_info = model.model_fields[field_name]
+    value = default_value or field_info.get_default()
+    value = NOTSET if value is PydanticUndefined else value
+    match field_info:
+        case field_info if field_info.annotation is BankAccountKey:
+            return Param(
+                value,
+                type="string",
+                title=field_info.title,
+                description_md=field_info.description,
+                enum=[key for key in LAST_STATEMENT.bank_accounts.keys()],
+            )
         case field_info if field_info.annotation is int:
             return Param(
                 value,
                 type="integer",
                 title=field_info.title,
-                description=field_info.description,
+                description_md=field_info.description,
             )
         case field_info if field_info.annotation is float:
             return Param(
                 value,
                 type="number",
                 title=field_info.title,
-                description=field_info.description,
+                description_md=field_info.description,
             )
         case field_info if issubclass(field_info.annotation, Enum):
             return Param(
                 value,
                 type="string",
                 title=field_info.title,
-                description=field_info.description,
+                description_md=field_info.description,
                 enum=[a.value for a in field_info.annotation],
             )
         case field_info:
@@ -53,11 +68,25 @@ def field2params(model: BaseModel, field_name: str, default_value=None) -> Param
                 value,
                 type="string",
                 title=field_info.title,
-                description=field_info.description,
+                description_md=field_info.description,
             )
 
 
-class DagUpsertMixin:
+class AFVarIoMixin:
+    @classmethod
+    def get(cls, key: str) -> Self:
+        return cls.model_validate_json(Variable.get(key))
+
+    def set(self, key: str, description: str):
+        Variable.set(
+            key=key,
+            value=self.model_dump_json(indent=2),
+            description=description,
+            serialize_json=False,  # pydantic이 이미 처리 함.
+        )
+
+
+class DagUpsertMixin(AFVarIoMixin):
     @property
     def key(self) -> str:
         raise NotImplementedError
@@ -66,13 +95,12 @@ class DagUpsertMixin:
     def dag(cls, instance: Self | None = None) -> DAG:
         @task()
         def save(**kwargs):
+            global LAST_STATEMENT
             circuit = MoneyCircuit()
             obj = cls(**kwargs["params"])
-            stmt = circuit.get_statement(
-                period=pendulum.now("Asia/Seoul").strftime("%Y-%m")
-            )
-            circuit.update(stmt, cls, obj)
-            circuit.save(stmt)
+            LAST_STATEMENT = circuit.update(LAST_STATEMENT, obj)
+            obj.set(obj.key, description=f"{kwargs['dag'].dag_id} 에서 upsert 된 값")
+            LAST_STATEMENT = circuit.save(LAST_STATEMENT)
 
         with DAG(
             dag_id=instance.key if instance else f"Create.{cls.__name__}",
@@ -86,7 +114,7 @@ class DagUpsertMixin:
                     default_value=getattr(instance, key) if instance else None,
                 )
                 for key in cls.model_fields
-                if key not in ["key"]
+                if key not in ["key", "created_at", "modified_at"]
             },
         ) as dag:
             save()
@@ -102,6 +130,10 @@ class BankAccountPurpose(str, Enum):
 
 
 class BankAccount(DagUpsertMixin, BaseModel):
+    modified_at: DateTime = Field(
+        # 누가봐도 수정한적 없어보이게 하기 위해 아주 옛날시간을 기본값으로 삼음.
+        default_factory=lambda: DateTime.now("Asia/Seoul").set(year=1900),
+    )
     name: str = Field(
         title="계좌 이름",
         description="은행 계좌 이름. 구분할 수 있게 작성하세요",
@@ -138,7 +170,7 @@ class BankAccount(DagUpsertMixin, BaseModel):
 
     @computed_field
     @property
-    def key(self) -> str:
+    def key(self) -> BankAccountKey:
         return f"bank_account.{self.name}.dag"
 
 
@@ -154,24 +186,26 @@ class MoneyFlowPipe(DagUpsertMixin, BaseModel):
     )
     kind: PipeKind = Field(
         title="파이프 유형",
-        description="""계좌와 계좌간 송금 정책을 결정합니다. 
+        description="""
+        계좌와 계좌간 송금 정책을 결정합니다. top-up 들이 먼저 처리 됩니다.
         
         - overflow: 출금 계좌가 넘칠 때 송금합니다. 
-        - top-up:  입금 계좌가 모자랄 때 송금합니다. overflow 들이 먼저 처리 됩니다.
+        - top-up:  입금 계좌가 모자랄 때 송금합니다. 
         """,
     )
-    input_account_key: str = Field(
+    input_account_key: BankAccountKey = Field(
         title="출금 계좌",
         description="돈이 빠져나갈 계좌의 key",
     )
-    output_account_key: str = Field(
+    output_account_key: BankAccountKey = Field(
         title="입금 계좌",
         description="돈이 들어가야할 계좌의 key",
     )
     ratio: float = Field(
-        0.8,
+        1.0,
         title="작동 비율",
-        description="""기준 계좌의 should_be_won 의 어느정도 수준일 때 작동할지 결정합니다. 일반적으로 아래의 값을 추천합니다.
+        description="""
+        기준 계좌의 should_be_won 의 어느정도 수준일 때 작동할지 결정합니다. 일반적으로 아래의 값을 추천합니다.
 
         - overflow: 1.0  
         - top-up: 0.8 
@@ -184,33 +218,32 @@ class MoneyFlowPipe(DagUpsertMixin, BaseModel):
         return f"pipe.{self.name}.dag"
 
 
-class MonthlyStatement(BaseModel):
-    key: str  # monthly_statement.%Y-%m
+class MonthlyStatement(AFVarIoMixin, BaseModel):
     period: str  # %Y-%m
     phase: str = "draft"
-    bank_accounts: dict[str, BankAccount] = {}
+    created_at: DateTime = Field(default_factory=lambda: DateTime.now("Asia/Seoul"))
+    bank_accounts: dict[BankAccountKey, BankAccount] = {}
     flow_pipes: dict[str, MoneyFlowPipe] = {}
 
-    @classmethod
-    def get(cls, key: str) -> Self:
-        return cls.model_validate_json(Variable.get(key))
-
-    def set(self, key: str, description: str):
-        Variable.set(
-            key=key,
-            value=self.model_dump_json(indent=2),
-            description=description,
-            serialize_json=False,  # pydantic이 이미 처리 함.
-        )
+    @computed_field
+    @property
+    def key(self) -> str:
+        return f"statement.{self.period}.json"
 
 
 class MoneyCircuit(LoggingMixin):
-    def update(self, stmt: MonthlyStatement, model: BaseModel, obj: DagUpsertMixin):
-        match model:
-            case _ if isinstance(model, BankAccount):
+    def update(self, stmt: MonthlyStatement, obj: DagUpsertMixin) -> MonthlyStatement:
+        match obj:
+            case BankAccount():
+                self.log.info(f"save {obj.key}")
+                cast(BankAccount, obj).modified_at = DateTime.now("Asia/Seoul")
                 stmt.bank_accounts[obj.key] = obj
-            case _ if isinstance(model, MoneyFlowPipe):
+            case MoneyFlowPipe():
+                self.log.info(f"save {obj.key}")
                 stmt.flow_pipes[obj.key] = obj
+            case _:
+                self.log.warning("Doesn't match any")
+        return stmt
 
     def get_statement(self, period: str) -> MonthlyStatement:
         key = f"statement.{period}.json"
@@ -222,28 +255,32 @@ class MoneyCircuit(LoggingMixin):
 
     def draft_statment(self, context: Context) -> MonthlyStatement:
         """"""
-        current = context["data_interval_end"].strftime("%Y-%m")
-        last_stmt = self.get_statement(
+        current = context["data_interval_end"].in_tz("Asia/Seoul")
+        prev_stmt = self.get_statement(
             period=context["data_interval_start"].strftime("%Y-%m")
         )
-        stmt = MonthlyStatement(
-            key=f"statement.{current}.json",
-            period=current,
-            bank_accounts=last_stmt.bank_accounts,
-        )
-        return self.save(stmt)
+        prev_stmt.created_at = current
+        prev_stmt.period = current.strftime("%Y-%m")
+        return self.save(prev_stmt)
 
     def save(self, stmt: MonthlyStatement) -> MonthlyStatement:
         stmt.set(
             key=stmt.key,
             description="MoneyCircuit가 생성한 결산서",
         )
-        return stmt
+        return MonthlyStatement.get(stmt.key)
 
 
 LAST_STATEMENT = MoneyCircuit().get_statement(
     period=pendulum.now("Asia/Seoul").strftime("%Y-%m")
 )
+
+# Provider 구현까지 가야 한다. 이건 다음에 하자.
+# class EditPageLink(BaseOperatorLink):
+#     name = "Edit Account"
+#
+#     def get_link(self, operator: BaseOperator, *, ti_key: TaskInstanceKey) -> str:
+#         return str(ti_key)
 
 
 @dag(
@@ -254,42 +291,49 @@ LAST_STATEMENT = MoneyCircuit().get_statement(
 )
 def money_circuit():
     """ """
+    from logging import getLogger
+
+    log = getLogger("airflow.task")
 
     @task()
-    def extract(**kwargs) -> dict:
+    def draft(**kwargs) -> list[BankAccountKey]:
         circuit = MoneyCircuit()
-        circuit.draft_statment(context=kwargs)
-        return {"a": 1, "b": 2}
+        stmt = circuit.draft_statment(context=kwargs)
+        return [key for key in stmt.bank_accounts.keys()]
 
-    @task(multiple_outputs=True)
-    def transform(order_data_dict: dict):
-        """
+    @task(retries=99999, retry_delay=timedelta(seconds=10))
+    def wait_for_user_update(bank_account_key, **kwargs):
+        context: Context = kwargs
+        circuit = MoneyCircuit()
+        current = context["data_interval_end"].strftime("%Y-%m")
+        stmt = circuit.get_statement(period=current)
 
-        #### Transform task
-
-        A simple Transform task which takes in the collection of order data and
-        computes the total order value.
-        """
-        total_order_value = 0
-
-        for value in order_data_dict.values():
-            total_order_value += value
-
-        return {"total_order_value": total_order_value}
+        ba = BankAccount.get(bank_account_key)
+        if ba.modified_at <= stmt.created_at:
+            log.info(f"{bank_account_key} is {ba.modified_at=}. wait_for_retry!")
+            raise ValueError("Try Again!")
+        circuit.save(circuit.update(stmt, ba))
+        log.info("waiting is done!")
 
     @task()
-    def load(total_order_value: float):
-        """
-        #### Load task
-        A simple Load task which takes in the result of the Transform task and
-        instead of saving it to end user review, just prints it out.
-        """
+    def process_pipes(**kwargs):
+        context: Context = kwargs
+        circuit = MoneyCircuit()
+        current = context["data_interval_end"].strftime("%Y-%m")
+        stmt = circuit.get_statement(period=current)
 
-        print(f"Total order value is: {total_order_value:.2f}")
+        for pipe in stmt.flow_pipes.values():
+            match pipe.kind:
+                case PipeKind.overflow:
+                    log.info(f"Hi Overflow {pipe.name}")
+                case PipeKind.top_up:
+                    log.info(f"Hi Top-UP {pipe.name}")
+                case _:
+                    log.warning("Doesn't match Any!")
 
-    order_data = extract()
-    order_summary = transform(order_data)
-    load(order_summary["total_order_value"])
+    keys = draft()
+    waiting = wait_for_user_update.expand(bank_account_key=keys)
+    _ = waiting >> process_pipes()
 
 
 money_circuit()
@@ -297,3 +341,5 @@ MoneyFlowPipe.dag()
 BankAccount.dag()
 for ba in LAST_STATEMENT.bank_accounts.values():
     ba.dag(ba)
+for pipe in LAST_STATEMENT.flow_pipes.values():
+    pipe.dag(pipe)

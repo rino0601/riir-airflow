@@ -261,6 +261,7 @@ class MoneyCircuit(LoggingMixin):
         )
         prev_stmt.created_at = current
         prev_stmt.period = current.strftime("%Y-%m")
+        Variable.set("LAST_STATEMENT_PERIOD", prev_stmt.period)
         return self.save(prev_stmt)
 
     def save(self, stmt: MonthlyStatement) -> MonthlyStatement:
@@ -272,7 +273,10 @@ class MoneyCircuit(LoggingMixin):
 
 
 LAST_STATEMENT = MoneyCircuit().get_statement(
-    period=pendulum.now("Asia/Seoul").strftime("%Y-%m")
+    period=Variable.get(
+        "LAST_STATEMENT_PERIOD",
+        default_var=pendulum.now("Asia/Seoul").strftime("%Y-%m"),
+    )
 )
 
 # Provider 구현까지 가야 한다. 이건 다음에 하자.

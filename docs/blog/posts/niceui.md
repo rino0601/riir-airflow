@@ -18,10 +18,11 @@ Elixir 의 Phoenix LiveView 를 부러워 했었는데, python+fastapi 생태계
 
 한달간 배운 바가 있으므로, 이를 적용해보자.
 
-- [ ] Elixir 코드 정리
+- [x] Elixir 코드 정리
   > codespace 가 날아가서 소스만 정리하면 되네?
 - [ ] make configure 만들 것
   > python 환경변수 동기화
+  > 불필요한 node stack 제거
 - [ ] mkdocstrings 셋업
   > 이제 이거 없이는 정리가 안되는 기분임...
 

@@ -18,13 +18,19 @@ export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
 all: help
 
 # setup dependencies
-.PHONY: setup ensure-node
-$(VIRTUAL_ENV)/include/node: |setup
-	nodeenv -p
-setup:
+.PHONY: setup update-all
+configure:
+	@echo SQLALCHEMY_SILENCE_UBER_WARNING=$(SQLALCHEMY_SILENCE_UBER_WARNING) > .env
+	@echo AIRFLOW_HOME=$(AIRFLOW_HOME) >>.env
+	@echo AIRFLOW__LOGGING__LOGGING_LEVEL=$(AIRFLOW__LOGGING__LOGGING_LEVEL) >>.env
+	@echo AIRFLOW__CORE__EXECUTOR=$(AIRFLOW__CORE__EXECUTOR) >>.env
+	@echo AIRFLOW__CORE__DAGS_FOLDER=$(AIRFLOW__CORE__DAGS_FOLDER) >>.env
+	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+	
+setup: configure
 	uv sync --frozen
 	uv run pre-commit install
-ensure-node: $(VIRTUAL_ENV)/include/node
 
 # Format code
 .PHONY: format format-check

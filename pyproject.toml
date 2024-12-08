@@ -31,9 +31,7 @@ dev-dependencies = [
     "mkdocs>=1.6.1",
     "mkdocs-material>=9.5.38",
     "mkdocstrings-python>=1.11.1",
-    "nodeenv>=1.9.1",
     "pre-commit>=3.8.0",
-    "pyright>=1.1.382.post1",
     "pytest>=8.3.3",
     "ruff>=0.6.8",
 ]

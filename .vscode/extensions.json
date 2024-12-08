@@ -3,6 +3,7 @@
         "charliermarsh.ruff",
         "ms-vscode-remote.remote-containers",
         "ms-vscode.makefile-tools",
-        "ms-python.python"
+        "ms-python.python",
+        "tamasfe.even-better-toml"
     ]
 }

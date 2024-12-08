@@ -9,22 +9,39 @@ export SQLALCHEMY_SILENCE_UBER_WARNING=1
 export AIRFLOW_HOME=$(VIRTUAL_ENV)/airflow
 export AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
 export AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
-export AIRFLOW__CORE__DAGS_FOLDER=$(shell realpath $(VIRTUAL_ENV)/..)/dags
+export AIRFLOW__CORE__DAGS_FOLDER=$(VIRTUAL_ENV)/dags
 export AIRFLOW__CORE__LOAD_EXAMPLES=False
 export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
 
-# Default target
-.PHONY: all
-all: help
+# Show help message(Default target; first present)
+.PHONY: help
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  help                  Show this help message"
+	@echo "  setup                 setup dependencies using Uv"
+	@echo "  run                   Run the application (airflow standalone)"
+	@echo "  test                  Run tests using pytest"
+	@echo "  format,format-check   Format code"
+	@echo "  lint,lint-fix         Lint code"
+	@echo "  type-check            Check types using pyright"
+	@echo "  clean,clean-hard      Clean build artifacts"
 
 # setup dependencies
-.PHONY: setup ensure-node
-$(VIRTUAL_ENV)/include/node: |setup
-	nodeenv -p
-setup:
+.PHONY: setup update-all
+configure:
+	@echo SQLALCHEMY_SILENCE_UBER_WARNING=$(SQLALCHEMY_SILENCE_UBER_WARNING) > .env
+	@echo AIRFLOW_HOME=$(AIRFLOW_HOME) >>.env
+	@echo AIRFLOW__LOGGING__LOGGING_LEVEL=$(AIRFLOW__LOGGING__LOGGING_LEVEL) >>.env
+	@echo AIRFLOW__CORE__EXECUTOR=$(AIRFLOW__CORE__EXECUTOR) >>.env
+	@echo AIRFLOW__CORE__DAGS_FOLDER=$(AIRFLOW__CORE__DAGS_FOLDER) >>.env
+	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+	
+setup: configure
 	uv sync --frozen
 	uv run pre-commit install
-ensure-node: $(VIRTUAL_ENV)/include/node
 
 # Format code
 .PHONY: format format-check
@@ -59,27 +76,13 @@ docs-check:
 # Run the application
 .PHONY: run
 run: setup
-	riir-airflow standalone
+	riir-airflow
 
 # Clean build artifacts
 .PHONY: clean clean-hard
 clean:
-	rm -rf .ruff_cache .pytest_cache \
+	rm -rf .ruff_cache .pytest_cache .nicegui/ \
 		$(VIRTUAL_ENV)/airflow
 clean-hard: clean
 	rye sync -f
 
-# Show help message
-.PHONY: help
-help:
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Targets:"
-	@echo "  setup                 setup dependencies using Uv"
-	@echo "  run                   Run the application (airflow standalone)"
-	@echo "  test                  Run tests using pytest"
-	@echo "  format,format-check   Format code"
-	@echo "  lint,lint-fix         Lint code"
-	@echo "  type-check            Check types using pyright"
-	@echo "  clean,clean-hard      Clean build artifacts"
-	@echo "  help                  Show this help message"

@@ -1,4 +1,14 @@
 {
+    "files.autoSave": "onFocusChange",
+    "files.exclude": {
+        "**/__pycache__": true
+    },
+    "files.watcherExclude": {
+        "**/.venv/**": true,
+        "**/dist/**": true,
+        "**/site/**": true,
+        "**/target/**": true
+    },
     "[python]": {
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff"
@@ -8,13 +18,8 @@
     "python.testing.pytestArgs": [
         "."
     ],
-    "files.watcherExclude": {
-        "**/.venv/**": true,
-        "**/dist/**": true,
-        "**/site/**": true,
-        "**/target/**": true
-    },
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
-    "makefile.configureOnOpen": false
+    "python.envFile": "${workspaceFolder}/.env",
+    "makefile.configureOnOpen": false,
 }

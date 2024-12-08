@@ -25,6 +25,7 @@ make
 
 추천 git 설정
 ```sh
+git config --global push.autoSetupRemote true
 git config --global pull.rebase true
 git config --global core.editor "vim"  # codespace 에서는 기본 환경변수 GIT_EDITOR 가 code --wait 여서 바로 적용되지 않음. unset GIT_EDITOR 또는 환경변수 조작 필요
 ```
@@ -33,3 +34,8 @@ git config --global core.editor "vim"  # codespace 에서는 기본 환경변수
 
 > https://containers.dev/ 문서를 보고 가꾸어 나갈 것
 
+### docs
+
+[mkdocs-material](https://squidfunk.github.io/mkdocs-material/) 를 사용합니다.
+[mkdocstrings](https://mkdocstrings.github.io/python/) 또한 즐겨 사용합니다.
+[pymdown/snippets](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/) 도 읽어보시길 바랍니다.

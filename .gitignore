@@ -17,5 +17,8 @@ target/
 #mkdocs
 site/
 
-# erl
-erl_crash.dump
+# dotenv
+.env
+
+# NiceGUI
+.nicegui/

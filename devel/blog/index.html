@@ -11,14 +11,14 @@
         <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/">
       
       
-        <link rel="prev" href="..">
+        <link rel="prev" href="../contributing/">
       
       
         <link rel="next" href="archive/2024/">
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.38">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.47">
     
     
       
@@ -26,7 +26,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.8c3ca2c6.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
@@ -47,6 +47,8 @@
         <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
       
     
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
     <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
@@ -202,7 +204,7 @@
         <a href="https://github.com/rino0601/riir-airflow" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -235,6 +237,23 @@
     
   
   Welcome to MkDocs
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../contributing/" class="md-tabs__link">
+        
+  
+    
+  
+  Contribution guide
 
       </a>
     </li>
@@ -296,7 +315,7 @@
       <a href="https://github.com/rino0601/riir-airflow" title="Go to repository" class="md-source" data-md-component="source">
   <div class="md-source__icon md-icon">
     
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.6.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
   </div>
   <div class="md-source__repository">
     GitHub
@@ -330,6 +349,26 @@
       
   
   
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Contribution guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
     
   
   
@@ -348,10 +387,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
             
   
   <span class="md-ellipsis">
@@ -362,8 +401,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
-          <label class="md-nav__title" for="__nav_2">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Blog
           </label>
@@ -541,10 +580,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
         
           
-          <label class="md-nav__link" for="__nav_2_2" id="__nav_2_2_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -555,8 +594,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_2_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_2_2">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
             <span class="md-nav__icon md-icon"></span>
             Archive
           </label>
@@ -737,7 +776,7 @@
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-10-13 00:00:00">October 13, 2024</time></li>
+          <time datetime="2024-10-13 00:00:00+00:00">October 13, 2024</time></li>
         
         
           
@@ -760,11 +799,11 @@
 <p>우선 엉망이 된 git 상태를 좀 다듬고 시작..!</p>
 <h3 id="install"><a class="toclink" href="2024/10/13/elixir-%EC%B2%B4%ED%97%98/#install">install 하기</a></h3>
 <p>codespace 환경에서 다음을 따라하면 됨.</p>
-<pre><code class="language-sh">sudo apt update
-sudo apt install erlang-dev elixir
-
-command -v iex mix elixir 
-</code></pre>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>sudo<span class="w"> </span>apt<span class="w"> </span>update
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>sudo<span class="w"> </span>apt<span class="w"> </span>install<span class="w"> </span>erlang-dev<span class="w"> </span>elixir
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="nb">command</span><span class="w"> </span>-v<span class="w"> </span>iex<span class="w"> </span>mix<span class="w"> </span>elixir<span class="w"> </span>
+</span></code></pre></div>
 <p>근데 현 시점 elixir 문서는 1.17, OTP 24 이나... codespace 에서 별다른 조치 안하고 설치한 apt 설치로는 </p>
 <p>1.9 에 OTP 22 로 설치된다. 너무 낮아서 가이드 따라하는데 걸림돌이 생길 듯 하다.</p>
 <p>https://elixir-lang.org/install.html 에 다양한 옵션이 있음. pyenv 포지션에 해당하는건 asdf 인듯함</p>
@@ -773,57 +812,57 @@ command -v iex mix elixir
 <p>asdf 선호하진 않지만, 일단 체험을 위해 asdf 를 설치해보자.</p>
 <p>asdf 설치는 단순 git clone 을 정해진 위치에 놓는것으로 끝나는 듯 하다.
 일단 bashrc 에 추가하진 않았음. 나는 이 셋업이 아직 맘에 들지 않으므로...!</p>
-<pre><code class="language-sh">git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.14.1
-source &quot;$HOME/.asdf/asdf.sh&quot;
-
-asdf plugin add erlang https://github.com/asdf-vm/asdf-erlang.git
-asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
-
-asdf install erlang latest
-asdf install elixir latest
-asdf local erlang latest  
-asdf local elixir latest  
-asdf current
-</code></pre>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/asdf-vm/asdf.git<span class="w"> </span>~/.asdf<span class="w"> </span>--branch<span class="w"> </span>v0.14.1
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">source</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$HOME</span><span class="s2">/.asdf/asdf.sh&quot;</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>asdf<span class="w"> </span>plugin<span class="w"> </span>add<span class="w"> </span>erlang<span class="w"> </span>https://github.com/asdf-vm/asdf-erlang.git
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>asdf<span class="w"> </span>plugin-add<span class="w"> </span>elixir<span class="w"> </span>https://github.com/asdf-vm/asdf-elixir.git
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>asdf<span class="w"> </span>install<span class="w"> </span>erlang<span class="w"> </span>latest
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>asdf<span class="w"> </span>install<span class="w"> </span>elixir<span class="w"> </span>latest
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>asdf<span class="w"> </span><span class="nb">local</span><span class="w"> </span>erlang<span class="w"> </span>latest<span class="w">  </span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>asdf<span class="w"> </span><span class="nb">local</span><span class="w"> </span>elixir<span class="w"> </span>latest<span class="w">  </span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>asdf<span class="w"> </span>current
+</span></code></pre></div>
 <p>erlang 설치가 생각보다 쉽지 않은 듯 함? 일단 무시하고 가이드를 따라 해본다.</p>
-<pre><code class="language-sh">Crash dump is being written to: erl_crash.dump...done
-riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf exec elixir -v
-{&quot;init terminating in do_boot&quot;,{undef,[{elixir,start_cli,[],[]},{init,start_em,1,[]},{init,do_boot,3,[]}]}}
-init terminating in do_boot ({undef,[{elixir,start_cli,[],[]},{init,start_em,1,[]},{init,do_boot,3,[]}]})
-
-Crash dump is being written to: erl_crash.dump...done
-riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf install erlang latest
-ERROR: 'asdf_27.1.1' is not a kerl-managed Erlang/OTP installation.
-ERROR: no build named 'asdf_27.1.1'!
-Downloading (from GitHub) Erlang/OTP 27.1.1 to /home/codespace/.asdf/downloads/erlang/27.1.1...
-Extracting source code for normal build...
-Building (normal) Erlang/OTP 27.1.1 (asdf_27.1.1); please wait...
-Initializing (build) log file at /home/codespace/.asdf/plugins/erlang/kerl-home/builds/asdf_27.1.1/otp_build_27.1.1.log.
-APPLICATIONS INFORMATION (See: /home/codespace/.asdf/plugins/erlang/kerl-home/builds/asdf_27.1.1/otp_build_27.1.1.log)
- * wx             : No OpenGL headers found, wx will NOT be usable
- * No GLU headers found, wx will NOT be usable
- * wxWidgets was not compiled with --enable-webview or wxWebView developer package is not installed, wxWebView will NOT be available
- *         wxWidgets must be installed on your system.
- *         Please check that wx-config is in path, the directory
- *         where wxWidgets libraries are installed (returned by
- *         'wx-config --libs' or 'wx-config --static --libs' command)
- *         is in LD_LIBRARY_PATH or equivalent variable and
- *         wxWidgets version is 3.0.2 or above.
-</code></pre>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Crash<span class="w"> </span>dump<span class="w"> </span>is<span class="w"> </span>being<span class="w"> </span>written<span class="w"> </span>to:<span class="w"> </span>erl_crash.dump...done
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>riir-airflow@rino0601<span class="w"> </span>➜<span class="w"> </span>/workspaces/riir-airflow<span class="w"> </span><span class="o">(</span>tour-elixir<span class="o">)</span><span class="w"> </span>$<span class="w"> </span>asdf<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>elixir<span class="w"> </span>-v
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="o">{</span><span class="s2">&quot;init terminating in do_boot&quot;</span>,<span class="o">{</span>undef,<span class="o">[{</span>elixir,start_cli,<span class="o">[]</span>,<span class="o">[]}</span>,<span class="o">{</span>init,start_em,1,<span class="o">[]}</span>,<span class="o">{</span>init,do_boot,3,<span class="o">[]}]}}</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>init<span class="w"> </span>terminating<span class="w"> </span><span class="k">in</span><span class="w"> </span>do_boot<span class="w"> </span><span class="o">({</span>undef,<span class="o">[{</span>elixir,start_cli,<span class="o">[]</span>,<span class="o">[]}</span>,<span class="o">{</span>init,start_em,1,<span class="o">[]}</span>,<span class="o">{</span>init,do_boot,3,<span class="o">[]}]})</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>Crash<span class="w"> </span>dump<span class="w"> </span>is<span class="w"> </span>being<span class="w"> </span>written<span class="w"> </span>to:<span class="w"> </span>erl_crash.dump...done
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>riir-airflow@rino0601<span class="w"> </span>➜<span class="w"> </span>/workspaces/riir-airflow<span class="w"> </span><span class="o">(</span>tour-elixir<span class="o">)</span><span class="w"> </span>$<span class="w"> </span>asdf<span class="w"> </span>install<span class="w"> </span>erlang<span class="w"> </span>latest
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>ERROR:<span class="w"> </span><span class="s1">&#39;asdf_27.1.1&#39;</span><span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>a<span class="w"> </span>kerl-managed<span class="w"> </span>Erlang/OTP<span class="w"> </span>installation.
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>ERROR:<span class="w"> </span>no<span class="w"> </span>build<span class="w"> </span>named<span class="w"> </span><span class="s1">&#39;asdf_27.1.1&#39;</span>!
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>Downloading<span class="w"> </span><span class="o">(</span>from<span class="w"> </span>GitHub<span class="o">)</span><span class="w"> </span>Erlang/OTP<span class="w"> </span><span class="m">27</span>.1.1<span class="w"> </span>to<span class="w"> </span>/home/codespace/.asdf/downloads/erlang/27.1.1...
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>Extracting<span class="w"> </span><span class="nb">source</span><span class="w"> </span>code<span class="w"> </span><span class="k">for</span><span class="w"> </span>normal<span class="w"> </span>build...
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>Building<span class="w"> </span><span class="o">(</span>normal<span class="o">)</span><span class="w"> </span>Erlang/OTP<span class="w"> </span><span class="m">27</span>.1.1<span class="w"> </span><span class="o">(</span>asdf_27.1.1<span class="o">)</span><span class="p">;</span><span class="w"> </span>please<span class="w"> </span>wait...
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>Initializing<span class="w"> </span><span class="o">(</span>build<span class="o">)</span><span class="w"> </span>log<span class="w"> </span>file<span class="w"> </span>at<span class="w"> </span>/home/codespace/.asdf/plugins/erlang/kerl-home/builds/asdf_27.1.1/otp_build_27.1.1.log.
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>APPLICATIONS<span class="w"> </span>INFORMATION<span class="w"> </span><span class="o">(</span>See:<span class="w"> </span>/home/codespace/.asdf/plugins/erlang/kerl-home/builds/asdf_27.1.1/otp_build_27.1.1.log<span class="o">)</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="w"> </span>*<span class="w"> </span>wx<span class="w">             </span>:<span class="w"> </span>No<span class="w"> </span>OpenGL<span class="w"> </span>headers<span class="w"> </span>found,<span class="w"> </span>wx<span class="w"> </span>will<span class="w"> </span>NOT<span class="w"> </span>be<span class="w"> </span>usable
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w"> </span>*<span class="w"> </span>No<span class="w"> </span>GLU<span class="w"> </span>headers<span class="w"> </span>found,<span class="w"> </span>wx<span class="w"> </span>will<span class="w"> </span>NOT<span class="w"> </span>be<span class="w"> </span>usable
+</span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w"> </span>*<span class="w"> </span>wxWidgets<span class="w"> </span>was<span class="w"> </span>not<span class="w"> </span>compiled<span class="w"> </span>with<span class="w"> </span>--enable-webview<span class="w"> </span>or<span class="w"> </span>wxWebView<span class="w"> </span>developer<span class="w"> </span>package<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>installed,<span class="w"> </span>wxWebView<span class="w"> </span>will<span class="w"> </span>NOT<span class="w"> </span>be<span class="w"> </span>available
+</span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="w"> </span>*<span class="w">         </span>wxWidgets<span class="w"> </span>must<span class="w"> </span>be<span class="w"> </span>installed<span class="w"> </span>on<span class="w"> </span>your<span class="w"> </span>system.
+</span><span id="__span-2-19"><a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w"> </span>*<span class="w">         </span>Please<span class="w"> </span>check<span class="w"> </span>that<span class="w"> </span>wx-config<span class="w"> </span>is<span class="w"> </span><span class="k">in</span><span class="w"> </span>path,<span class="w"> </span>the<span class="w"> </span>directory
+</span><span id="__span-2-20"><a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="w"> </span>*<span class="w">         </span>where<span class="w"> </span>wxWidgets<span class="w"> </span>libraries<span class="w"> </span>are<span class="w"> </span>installed<span class="w"> </span><span class="o">(</span>returned<span class="w"> </span>by
+</span><span id="__span-2-21"><a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a><span class="w"> </span>*<span class="w">         </span><span class="s1">&#39;wx-config --libs&#39;</span><span class="w"> </span>or<span class="w"> </span><span class="s1">&#39;wx-config --static --libs&#39;</span><span class="w"> </span><span class="nb">command</span><span class="o">)</span>
+</span><span id="__span-2-22"><a id="__codelineno-2-22" name="__codelineno-2-22" href="#__codelineno-2-22"></a><span class="w"> </span>*<span class="w">         </span>is<span class="w"> </span><span class="k">in</span><span class="w"> </span>LD_LIBRARY_PATH<span class="w"> </span>or<span class="w"> </span>equivalent<span class="w"> </span>variable<span class="w"> </span>and
+</span><span id="__span-2-23"><a id="__codelineno-2-23" name="__codelineno-2-23" href="#__codelineno-2-23"></a><span class="w"> </span>*<span class="w">         </span>wxWidgets<span class="w"> </span>version<span class="w"> </span>is<span class="w"> </span><span class="m">3</span>.0.2<span class="w"> </span>or<span class="w"> </span>above.
+</span></code></pre></div>
 <p>좀 오래 걸릴 뿐 성공은 했다.</p>
-<pre><code class="language-sh">riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf current
-elixir          1.17.3-otp-27   /workspaces/riir-airflow/.tool-versions
-erlang          27.1.1          /workspaces/riir-airflow/.tool-versions
-riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf exec elixir -v      
-Erlang/OTP 27 [erts-15.1.1] [source] [64-bit] [smp:2:2] [ds:2:2:10] [async-threads:1] [jit:ns]
-
-Elixir 1.17.3 (compiled with Erlang/OTP 27)
-riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ 
-</code></pre>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>riir-airflow@rino0601<span class="w"> </span>➜<span class="w"> </span>/workspaces/riir-airflow<span class="w"> </span><span class="o">(</span>tour-elixir<span class="o">)</span><span class="w"> </span>$<span class="w"> </span>asdf<span class="w"> </span>current
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>elixir<span class="w">          </span><span class="m">1</span>.17.3-otp-27<span class="w">   </span>/workspaces/riir-airflow/.tool-versions
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>erlang<span class="w">          </span><span class="m">27</span>.1.1<span class="w">          </span>/workspaces/riir-airflow/.tool-versions
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>riir-airflow@rino0601<span class="w"> </span>➜<span class="w"> </span>/workspaces/riir-airflow<span class="w"> </span><span class="o">(</span>tour-elixir<span class="o">)</span><span class="w"> </span>$<span class="w"> </span>asdf<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>elixir<span class="w"> </span>-v<span class="w">      </span>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>Erlang/OTP<span class="w"> </span><span class="m">27</span><span class="w"> </span><span class="o">[</span>erts-15.1.1<span class="o">]</span><span class="w"> </span><span class="o">[</span>source<span class="o">]</span><span class="w"> </span><span class="o">[</span><span class="m">64</span>-bit<span class="o">]</span><span class="w"> </span><span class="o">[</span>smp:2:2<span class="o">]</span><span class="w"> </span><span class="o">[</span>ds:2:2:10<span class="o">]</span><span class="w"> </span><span class="o">[</span>async-threads:1<span class="o">]</span><span class="w"> </span><span class="o">[</span>jit:ns<span class="o">]</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>Elixir<span class="w"> </span><span class="m">1</span>.17.3<span class="w"> </span><span class="o">(</span>compiled<span class="w"> </span>with<span class="w"> </span>Erlang/OTP<span class="w"> </span><span class="m">27</span><span class="o">)</span>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>riir-airflow@rino0601<span class="w"> </span>➜<span class="w"> </span>/workspaces/riir-airflow<span class="w"> </span><span class="o">(</span>tour-elixir<span class="o">)</span><span class="w"> </span>$<span class="w"> </span>
+</span></code></pre></div>
 <p>쉘을 닫고 새로 여니, nodeenv 랑 asdf 랑 궁합이 맞지 않는다는걸 발견했다.</p>
-<pre><code>nvm is not compatible with the &quot;NPM_CONFIG_PREFIX&quot; environment variable: currently set to &quot;/workspaces/riir-airflow/.venv&quot;
-Run `unset NPM_CONFIG_PREFIX` to unset it.
-</code></pre>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>nvm is not compatible with the &quot;NPM_CONFIG_PREFIX&quot; environment variable: currently set to &quot;/workspaces/riir-airflow/.venv&quot;
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Run `unset NPM_CONFIG_PREFIX` to unset it.
+</span></code></pre></div>
 <p>쉘을 닫고 새로 여니, 이제야 최신 버젼으로 잡힌다.</p>
 <h3 id="introduction-to-mix"><a class="toclink" href="2024/10/13/elixir-%EC%B2%B4%ED%97%98/#introduction-to-mix">Introduction to Mix</a></h3>
 <p>https://hexdocs.pm/elixir/introduction-to-mix.html 를 따라해보았다. elixir 프로젝트는 어떻게 만드는가?</p>
@@ -866,7 +905,7 @@ Run `unset NPM_CONFIG_PREFIX` to unset it.
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-08-07 00:00:00">August 7, 2024</time></li>
+          <time datetime="2024-08-07 00:00:00+00:00">August 7, 2024</time></li>
         
         
           
@@ -947,7 +986,7 @@ https://rye.astral.sh/guide/installation/#add-shims-to-path 까지 따라해야 
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-07-29 00:00:00">July 29, 2024</time></li>
+          <time datetime="2024-07-29 00:00:00+00:00">July 29, 2024</time></li>
         
         
           
@@ -988,7 +1027,7 @@ https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contr
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-06-30 00:00:00">June 30, 2024</time></li>
+          <time datetime="2024-06-30 00:00:00+00:00">June 30, 2024</time></li>
         
         
           
@@ -1026,25 +1065,25 @@ https://docs.github.com/en/communities/setting-up-your-project-for-healthy-contr
 <p>branch project 설정부터 진행 했다.
 rulsets 라고 신 기능이 생긴모양? 2분 정도 어색하긴 했는데, 전 보다 훨씬 쓰기 편해진것으로 보임.</p>
 <p>적용후, main 에 push 하여 설정된걸 확인.</p>
-<pre><code>riir-airflow➜  riir-airflow git:(main) gp
-Enumerating objects: 5, done.
-Counting objects: 100% (5/5), done.
-Delta compression using up to 32 threads
-Compressing objects: 100% (3/3), done.
-Writing objects: 100% (3/3), 307 bytes | 307.00 KiB/s, done.
-Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
-remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
-remote: error: GH013: Repository rule violations found for refs/heads/main.
-remote: Review all repository rules at http://github.com/rino0601/riir-airflow/rules?ref=refs%2Fheads%2Fmain
-remote: 
-remote: - Changes must be made through a pull request.
-remote: 
-To github.com:rino0601/riir-airflow.git
- ! [remote rejected] main -&gt; main (push declined due to repository rule violations)
-error: failed to push some refs to 'github.com:rino0601/riir-airflow.git'
-riir-airflow➜  riir-airflow git:(main) glog
-riir-airflow➜  riir-airflow git:(main) git reset f600975
-</code></pre>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>riir-airflow➜  riir-airflow git:(main) gp
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>Enumerating objects: 5, done.
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>Counting objects: 100% (5/5), done.
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>Delta compression using up to 32 threads
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>Compressing objects: 100% (3/3), done.
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>Writing objects: 100% (3/3), 307 bytes | 307.00 KiB/s, done.
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>Total 3 (delta 2), reused 0 (delta 0), pack-reused 0
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>remote: Resolving deltas: 100% (2/2), completed with 2 local objects.
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>remote: error: GH013: Repository rule violations found for refs/heads/main.
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>remote: Review all repository rules at http://github.com/rino0601/riir-airflow/rules?ref=refs%2Fheads%2Fmain
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>remote: 
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>remote: - Changes must be made through a pull request.
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>remote: 
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>To github.com:rino0601/riir-airflow.git
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a> ! [remote rejected] main -&gt; main (push declined due to repository rule violations)
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>error: failed to push some refs to &#39;github.com:rino0601/riir-airflow.git&#39;
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>riir-airflow➜  riir-airflow git:(main) glog
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>riir-airflow➜  riir-airflow git:(main) git reset f600975
+</span></code></pre></div>
 <p>회사 업무때 했던건데, cccv 못 하니까 너무 불편하고 힘들다...
 이렇게 내것으로 만드는 것이겠지.</p>
 <p>키보드 느낌 달라서 불편한 점도 많이 있는 듯
@@ -1086,7 +1125,7 @@ pyright 도 걸었는데, 이건 좀 많네;</p>
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-06-24 00:00:00">June 24, 2024</time></li>
+          <time datetime="2024-06-24 00:00:00+00:00">June 24, 2024</time></li>
         
         
           
@@ -1132,47 +1171,47 @@ pyright 도 걸었는데, 이건 좀 많네;</p>
 <li>ip 는 고정 안될 텐데 오늘은 신경 쓸 필요 전혀 없음.</li>
 <li>접속 </li>
 </ul>
-<pre><code class="language-sh">[22:58:21.332] &gt; Exec server process not found
-&gt; [2024-06-24 13:58:19] error This machine does not meet Visual Studio Code Server
-&gt; 's prerequisites, expected either...
-&gt;   - find libstdc++.so or ldconfig for GNU environments
-&gt;   - find /lib/ld-musl-aarch64.so.1, which is required to run the Visual Studio C
-&gt; ode Server in musl environments
-[22:58:21.347] &gt; 
-[22:58:21.362] &gt; 6b5b59277f5d: s
-</code></pre>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="o">[</span><span class="m">22</span>:58:21.332<span class="o">]</span><span class="w"> </span>&gt;<span class="w"> </span>Exec<span class="w"> </span>server<span class="w"> </span>process<span class="w"> </span>not<span class="w"> </span>found
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>&gt;<span class="w"> </span><span class="o">[</span><span class="m">2024</span>-06-24<span class="w"> </span><span class="m">13</span>:58:19<span class="o">]</span><span class="w"> </span>error<span class="w"> </span>This<span class="w"> </span>machine<span class="w"> </span>does<span class="w"> </span>not<span class="w"> </span>meet<span class="w"> </span>Visual<span class="w"> </span>Studio<span class="w"> </span>Code<span class="w"> </span>Server
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>&gt;<span class="w"> </span><span class="err">&#39;</span>s<span class="w"> </span>prerequisites,<span class="w"> </span>expected<span class="w"> </span>either...
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>&gt;<span class="w">   </span>-<span class="w"> </span>find<span class="w"> </span>libstdc++.so<span class="w"> </span>or<span class="w"> </span>ldconfig<span class="w"> </span><span class="k">for</span><span class="w"> </span>GNU<span class="w"> </span>environments
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>&gt;<span class="w">   </span>-<span class="w"> </span>find<span class="w"> </span>/lib/ld-musl-aarch64.so.1,<span class="w"> </span>which<span class="w"> </span>is<span class="w"> </span>required<span class="w"> </span>to<span class="w"> </span>run<span class="w"> </span>the<span class="w"> </span>Visual<span class="w"> </span>Studio<span class="w"> </span>C
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>&gt;<span class="w"> </span>ode<span class="w"> </span>Server<span class="w"> </span><span class="k">in</span><span class="w"> </span>musl<span class="w"> </span>environments
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="o">[</span><span class="m">22</span>:58:21.347<span class="o">]</span><span class="w"> </span>&gt;<span class="w"> </span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="o">[</span><span class="m">22</span>:58:21.362<span class="o">]</span><span class="w"> </span>&gt;<span class="w"> </span>6b5b59277f5d:<span class="w"> </span>s
+</span></code></pre></div>
 <p>vscode Remote:Host 는 불가함.</p>
 <p>code-server 를 설치하고 localhost:xxxx 로 접근해보자</p>
-<p>termux 에서 곧바로 하니 실패함.</p>
-<pre><code>+ tar -C ~/.local/lib -xzf ~/.cache/code-server/code-server-4.90.3-linux-arm64.tar.gz
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/native-watchdog/build/Release/watchdog.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/native-watchdog/build/Release/obj.target/watchdog.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/kerberos/build/Release/kerberos.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/kerberos/build/Release/obj.target/kerberos.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-process-tree/build/Release/windows_process_tree.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-process-tree/build/Release/obj.target/windows_process_tree.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/spdlog/build/Release/obj.target/spdlog.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/spdlog/build/Release/spdlog.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-registry/build/Release/winregistry.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-registry/build/Release/obj.target/winregistry.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/deviceid/build/Release/windows.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/deviceid/build/Release/obj.target/windows.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/nothing.a: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/obj.target/node_modules/node-addon-api/nothing.a’: Permission denied
-tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/watcher.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/obj.target/watcher.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/obj.target/argon2.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/lib/binding/napi-v3/argon2.node’: Permission denied
-tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/argon2.a: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/obj.target/argon2.a’: Permission denied
-tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/argon2.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/lib/binding/napi-v3/argon2.node’: Permission denied
-tar: Exiting with failure status due to previous errors
-</code></pre>
-<p>proot 상태에서 해보자</p>
+<p>termux 에서 곧바로 하니 실패함.
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>+ tar -C ~/.local/lib -xzf ~/.cache/code-server/code-server-4.90.3-linux-arm64.tar.gz
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/native-watchdog/build/Release/watchdog.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/native-watchdog/build/Release/obj.target/watchdog.node’: Permission denied
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/kerberos/build/Release/kerberos.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/kerberos/build/Release/obj.target/kerberos.node’: Permission denied
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-process-tree/build/Release/windows_process_tree.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-process-tree/build/Release/obj.target/windows_process_tree.node’: Permission denied
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/spdlog/build/Release/obj.target/spdlog.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/spdlog/build/Release/spdlog.node’: Permission denied
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-registry/build/Release/winregistry.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/windows-registry/build/Release/obj.target/winregistry.node’: Permission denied
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/deviceid/build/Release/windows.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@vscode/deviceid/build/Release/obj.target/windows.node’: Permission denied
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/nothing.a: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/obj.target/node_modules/node-addon-api/nothing.a’: Permission denied
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>tar: code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/watcher.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/lib/vscode/node_modules/@parcel/watcher/build/Release/obj.target/watcher.node’: Permission denied
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/obj.target/argon2.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/lib/binding/napi-v3/argon2.node’: Permission denied
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/argon2.a: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/obj.target/argon2.a’: Permission denied
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>tar: code-server-4.90.3-linux-arm64/node_modules/argon2/build-tmp-napi-v3/Release/argon2.node: Cannot hard link to ‘code-server-4.90.3-linux-arm64/node_modules/argon2/lib/binding/napi-v3/argon2.node’: Permission denied
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>tar: Exiting with failure status due to previous errors
+</span></code></pre></div>
+proot 상태에서 해보자</p>
 <h3 id="_4"><a class="toclink" href="2024/06/24/2024-06-24/#_4">결과</a></h3>
-<pre><code class="language-sh"># termux 켜기, 메뉴얼하게 sshd 열기
-sshd
-# 접속 방법 확인
-whoami &amp;&amp; ifconfig
-
-# ssh -p 8022  한 후, code-server 설치
-proot-distro login ubuntu
-curl -fsSL https://code-server.dev/install.sh | sh
-# 비번 확인
-cat  /root/.config/code-server/config.yaml
-# 구동
-code-server --bind-addr 0.0.0.0:8081
-</code></pre>
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># termux 켜기, 메뉴얼하게 sshd 열기</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>sshd
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># 접속 방법 확인</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>whoami<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>ifconfig
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="c1"># ssh -p 8022  한 후, code-server 설치</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>proot-distro<span class="w"> </span>login<span class="w"> </span>ubuntu
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://code-server.dev/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>sh
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="c1"># 비번 확인</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>cat<span class="w">  </span>/root/.config/code-server/config.yaml
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="c1"># 구동</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>code-server<span class="w"> </span>--bind-addr<span class="w"> </span><span class="m">0</span>.0.0.0:8081
+</span></code></pre></div>
 <p>기대대로 잘 된다는 것을 확인 했다.
 장비가 느려서 그리고 sqlite 라서 동시성이 강제로 1로 떨어졌기 때문에 느리게 반응했지만,
 작업이 작동하는 사이에도 웹서버는 반응 했다.</p>
@@ -1187,7 +1226,7 @@ code-server --bind-addr 0.0.0.0:8081
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-06-09 00:00:00">June 9, 2024</time></li>
+          <time datetime="2024-06-09 00:00:00+00:00">June 9, 2024</time></li>
         
         
           
@@ -1213,10 +1252,10 @@ code-server --bind-addr 0.0.0.0:8081
 <li>--raw 옵션은 신경쓰지 않고 일단 작업해봄</li>
 <li>--local 을 제꼈더니...</li>
 </ul>
-<pre><code>[SQL: UPDATE task_instance SET state=?, queued_by_job_id=?, updated_at=? WHERE task_instance.dag_id = ? AND task_instance.task_id = ? AND task_instance.run_id = ? AND task_instance.map_index = ?]
-[parameters: ((None, None, '2024-06-09 14:33:04.563888', 'example_sla_dag', 'sleep_20', 'scheduled__2024-06-09T14:08:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563891', 'example_sla_dag', 'sleep_20', 'scheduled__2024-06-09T14:10:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563893', 'example_sla_dag', 'sleep_30', 'scheduled__2024-06-09T14:20:00+00:00', -1), (None, None, '2024-06-09 14:33:04.563894', 'example_sla_dag', 'sleep_30', 'scheduled__2024-06-09T14:22:00+00:00', -1))]
-(Background on this error at: https://sqlalche.me/e/14/4xp6) (Background on this error at: https://sqlalche.me/e/14/7s2a)
-</code></pre>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>[SQL: UPDATE task_instance SET state=?, queued_by_job_id=?, updated_at=? WHERE task_instance.dag_id = ? AND task_instance.task_id = ? AND task_instance.run_id = ? AND task_instance.map_index = ?]
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>[parameters: ((None, None, &#39;2024-06-09 14:33:04.563888&#39;, &#39;example_sla_dag&#39;, &#39;sleep_20&#39;, &#39;scheduled__2024-06-09T14:08:00+00:00&#39;, -1), (None, None, &#39;2024-06-09 14:33:04.563891&#39;, &#39;example_sla_dag&#39;, &#39;sleep_20&#39;, &#39;scheduled__2024-06-09T14:10:00+00:00&#39;, -1), (None, None, &#39;2024-06-09 14:33:04.563893&#39;, &#39;example_sla_dag&#39;, &#39;sleep_30&#39;, &#39;scheduled__2024-06-09T14:20:00+00:00&#39;, -1), (None, None, &#39;2024-06-09 14:33:04.563894&#39;, &#39;example_sla_dag&#39;, &#39;sleep_30&#39;, &#39;scheduled__2024-06-09T14:22:00+00:00&#39;, -1))]
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>(Background on this error at: https://sqlalche.me/e/14/4xp6) (Background on this error at: https://sqlalche.me/e/14/7s2a)
+</span></code></pre></div>
 <p>job 이 생성 안되었기 때문에, sql 이 실패한다.
 job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
 <p>WSL1 에서의 sqlite3 까지 지원하는건 너무 어려운 목표일까?</p>
@@ -1244,7 +1283,7 @@ job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-06-08 00:00:00">June 8, 2024</time></li>
+          <time datetime="2024-06-08 00:00:00+00:00">June 8, 2024</time></li>
         
         
           
@@ -1294,7 +1333,7 @@ job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-05-23 00:00:00">May 23, 2024</time></li>
+          <time datetime="2024-05-23 00:00:00+00:00">May 23, 2024</time></li>
         
         
           
@@ -1345,7 +1384,7 @@ job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-05-13 00:00:00">May 13, 2024</time></li>
+          <time datetime="2024-05-13 00:00:00+00:00">May 13, 2024</time></li>
         
         
           
@@ -1389,7 +1428,7 @@ job 을 안 만드는건 어렵다. 고쳐야 할게 너무 많다.</p>
     <div class="md-post__meta md-meta">
       <ul class="md-meta__list">
         <li class="md-meta__item">
-          <time datetime="2024-05-11 00:00:00">May 11, 2024</time></li>
+          <time datetime="2024-05-11 00:00:00+00:00">May 11, 2024</time></li>
         
         
           
@@ -1474,7 +1513,7 @@ https://cwiki.apache.org/confluence/display/AIRFLOW/AIP-61+Hybrid+Execution</p>
     <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tabs"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.d6f25eb3.min.js"></script>
+      <script src="../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

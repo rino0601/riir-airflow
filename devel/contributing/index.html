@@ -8,26 +8,28 @@
       
       
       
-        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/blog/2024/05/06/2024-05-06/">
+        <link rel="canonical" href="https://rino0601.github.io/riit-airflow/devel/contributing/">
       
       
+        <link rel="prev" href="..">
       
-        <link rel="next" href="../../07/2024-05-07/">
+      
+        <link rel="next" href="../blog/">
       
       
-      <link rel="icon" href="../../../../../assets/images/favicon.png">
+      <link rel="icon" href="../assets/images/favicon.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.5.47">
     
     
       
-        <title>2024 05 06 - My Docs</title>
+        <title>Contribution guide - My Docs</title>
       
     
     
-      <link rel="stylesheet" href="../../../../../assets/stylesheets/main.6f8fc17f.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.6f8fc17f.min.css">
       
         
-        <link rel="stylesheet" href="../../../../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -46,9 +48,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../../../assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-    <script>__md_scope=new URL("../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -73,6 +75,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#contribution-guide" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -87,7 +94,7 @@
 
 <header class="md-header" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../../.." title="My Docs" class="md-header__button md-logo" aria-label="My Docs" data-md-component="logo">
+    <a href=".." title="My Docs" class="md-header__button md-logo" aria-label="My Docs" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -107,7 +114,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              2024 05 06
+              Contribution guide
             
           </span>
         </div>
@@ -224,7 +231,7 @@
   
   
     <li class="md-tabs__item">
-      <a href="../../../../.." class="md-tabs__link">
+      <a href=".." class="md-tabs__link">
         
   
     
@@ -239,9 +246,11 @@
         
   
   
+    
   
-    <li class="md-tabs__item">
-      <a href="../../../../../contributing/" class="md-tabs__link">
+  
+    <li class="md-tabs__item md-tabs__item--active">
+      <a href="./" class="md-tabs__link">
         
   
     
@@ -256,13 +265,11 @@
         
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="../../../../" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../blog/" class="md-tabs__link">
           
   
   Blog
@@ -284,9 +291,7 @@
           
             
               
-                
-              
-              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" hidden>
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
                     
@@ -297,7 +302,7 @@
 
 <nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../../.." title="My Docs" class="md-nav__button md-logo" aria-label="My Docs" data-md-component="logo">
+    <a href=".." title="My Docs" class="md-nav__button md-logo" aria-label="My Docs" data-md-component="logo">
       
   
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
@@ -327,7 +332,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../.." class="md-nav__link">
+      <a href=".." class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -344,10 +349,30 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../../contributing/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Contribution guide
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   <span class="md-ellipsis">
@@ -356,6 +381,77 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#issue" class="md-nav__link">
+    <span class="md-ellipsis">
+      issue?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-pr-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      commit? PR rule?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developement-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Developement Environment
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Developement Environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#devcontainer" class="md-nav__link">
+    <span class="md-ellipsis">
+      .devcontainer/
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      docs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -364,28 +460,23 @@
       
   
   
-    
   
   
-  
     
     
     
       
-        
-        
-      
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   <span class="md-ellipsis">
@@ -396,7 +487,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             Blog
@@ -407,14 +498,12 @@
                 
   
   
-    
-  
   
     
   
   
-    <li class="md-nav__item md-nav__item--active">
-      <a href="../../../../" class="md-nav__link">
+    <li class="md-nav__item">
+      <a href="../blog/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -475,7 +564,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../archive/2024/" class="md-nav__link">
+      <a href="../blog/archive/2024/" class="md-nav__link">
         
   
   <span class="md-ellipsis">
@@ -512,8 +601,6 @@
             
             
               
-                
-              
               <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
                 <div class="md-sidebar__scrollwrap">
                   <div class="md-sidebar__inner">
@@ -523,6 +610,67 @@
   
   
   
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#issue" class="md-nav__link">
+    <span class="md-ellipsis">
+      issue?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-pr-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      commit? PR rule?
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developement-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Developement Environment
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Developement Environment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#devcontainer" class="md-nav__link">
+    <span class="md-ellipsis">
+      .devcontainer/
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#docs" class="md-nav__link">
+    <span class="md-ellipsis">
+      docs
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
   
 </nav>
                   </div>
@@ -531,91 +679,48 @@
             
           
           
-  <div class="md-content md-content--post" data-md-component="content">
-    <div class="md-sidebar md-sidebar--post" data-md-component="sidebar" data-md-type="navigation">
-      <div class="md-sidebar__scrollwrap">
-        <div class="md-sidebar__inner md-post">
-          <nav class="md-nav md-nav--primary">
-            <div class="md-post__back">
-              <div class="md-nav__title md-nav__container">
-                <a href="../../../../" class="md-nav__link">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
-                  <span class="md-ellipsis">
-                    Back to index
-                  </span>
-                </a>
-              </div>
-            </div>
-            
-            <ul class="md-post__meta md-nav__list">
-              <li class="md-nav__item md-nav__item--section">
-                <div class="md-post__title">
-                  <span class="md-ellipsis">
-                    Metadata
-                  </span>
-                </div>
-                <nav class="md-nav">
-                  <ul class="md-nav__list">
-                    <li class="md-nav__item">
-                      <div class="md-nav__link">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 19H5V8h14m-3-7v2H8V1H6v2H5c-1.11 0-2 .89-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-1V1m-1 11h-5v5h5z"/></svg>
-                        <time datetime="2024-05-06 00:00:00+00:00" class="md-ellipsis">May 6, 2024</time>
-                      </div>
-                    </li>
-                    
-                    
-                    
-                      
-                      <li class="md-nav__item">
-                        <div class="md-nav__link">
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 20a8 8 0 0 0 8-8 8 8 0 0 0-8-8 8 8 0 0 0-8 8 8 8 0 0 0 8 8m0-18a10 10 0 0 1 10 10 10 10 0 0 1-10 10C6.47 22 2 17.5 2 12A10 10 0 0 1 12 2m.5 5v5.25l4.5 2.67-.75 1.23L11 13V7z"/></svg>
-                          <span class="md-ellipsis">
-                            
-                              1 min read
-                            
-                          </span>
-                        </div>
-                      </li>
-                    
-                  </ul>
-                </nav>
-              </li>
-            </ul>
-          </nav>
-          
-        </div>
-      </div>
-    </div>
-    <article class="md-content__inner md-typeset">
-      
-        
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
 
   
   
 
 
-  <h1>2024 05 06</h1>
-
+<h1 id="contribution-guide">Contribution guide</h1>
+<h2 id="issue">issue?</h2>
+<blockquote>
+<p>TBD</p>
+</blockquote>
+<h2 id="commit-pr-rule">commit? PR rule?</h2>
+<blockquote>
+<p>TBD</p>
+</blockquote>
+<h2 id="developement-environment">Developement Environment</h2>
+<p>uv 를 이용한 monorepo python 프로젝트이며, rust 바인딩을 사용할 계획이고, task 매니져로서 make 를 사용합니다.</p>
+<p>따라서 make, uv, rustup 을 먼저 설치해야 합니다. 셋 모두 설치법을 찾기 쉬우니 따로 자세히 설명하진 않겠습니다.</p>
 <ul>
-<li>2024-05-05 부터 시작해, 아이디어를 모두 정리하여 README.md 를 작성.</li>
-<li>전부터 생각만 하던, FastAPI에 airflow webserver 를 mount 해서 기동하면 어떨까? 를 실현. 생각보다 매끄럽게 잘 되서 놀랐다.</li>
-<li>당장의 목표는 airflow standalone 명령의 재현으로, 각 컴포넌트는 개별 subprocess 로 만들어질 듯 싶다.</li>
-<li>가급적 asyncio 만 쓰고 싶었는데, polling 처리가 너무 어렵다. sh 를 쓴다.</li>
-<li>그러나 그렇게 되면, sqlite 의 thread 접근을 따져가면서 사용해야 하므로 불편하다. 궁국적으로는 scheduler, worker, triggerer, dagparser 등을 asyncio 안에 녹여내어야 할 것이다.</li>
-<li>그러면, uvicorn 워커가 늘어나면 어떻게 됨? 이란 질문이 생길 수 있는데, 늘리는데에 있어서 장점이 없다. 라고 할 수 있겠다.</li>
-<li>어떻게 작동시키는데는 성공했고, WSL1 의 제약 때문에 (마치 NFS 에 있는 sqlite 를 쓰는데 문제가 있듯) sqlite 가 동시 접근을 당하자 프로세스가 죽어버렸다.</li>
-<li>이 문제 해결을 위해서라도 스케쥴링 로직을 async 하게 고쳐야 한다.</li>
-<li>triggerer 는 async 를 쓸테니, async 한 db 접근자가 있을 것이라 가정하고 코드를 따라가 보았다.<ul>
-<li>그러지 않았다.</li>
-<li>job runner 가 이벤트 루프를 위한 Tread 를 하나 만든다. 그 안에서 asyncio.run() 한다. </li>
-<li>job runner의 메인 스레드와 asyncio 를 위한 스레드는 프로세스 분기가 아니라 스레드 분기이므로, 값을 주고 받을 수 있다.</li>
-<li>job runner의 메인 스레드가 루프를 돌아 db에서 값을 만들어 열심히 deque 를 채우면, asyncio 루프에서 열심히 소비한다.</li>
+<li>make: 아마 당연히...</li>
+<li>uv: https://docs.astral.sh/uv/getting-started/installation/</li>
+<li>rustup https://www.rust-lang.org/tools/install</li>
 </ul>
-</li>
-<li>즉, 이 구조는 일단 멀티 스레드이다. WSL의 sqlite 동시성 극복으로는 쓸 수 없다.</li>
-<li>네이티브하게 async 하고 싶다면, sqlalchemy 부터 어떻게 해야 한다.</li>
-<li>sqlalchemy==1.4.52 로, async API 가 존재는 한다. 그러나 이게 쓸 수 있다는 얘기는 아니다...</li>
-</ul>
+<p>make</p>
+<p><code>make run</code> 으로 개발 모드로 구동해 볼 수 있습니다. </p>
+<p>그외 다른 사용법은 <code>uv run make</code> 하면 설명이 기재되어 있습니다.</p>
+<p>추천 git 설정
+<div class="language-sh highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>push.autoSetupRemote<span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>pull.rebase<span class="w"> </span><span class="nb">true</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>git<span class="w"> </span>config<span class="w"> </span>--global<span class="w"> </span>core.editor<span class="w"> </span><span class="s2">&quot;vim&quot;</span><span class="w">  </span><span class="c1"># codespace 에서는 기본 환경변수 GIT_EDITOR 가 code --wait 여서 바로 적용되지 않음. unset GIT_EDITOR 또는 환경변수 조작 필요</span>
+</span></code></pre></div></p>
+<h3 id="devcontainer">.devcontainer/</h3>
+<blockquote>
+<p>https://containers.dev/ 문서를 보고 가꾸어 나갈 것</p>
+</blockquote>
+<h3 id="docs">docs</h3>
+<p><a href="https://squidfunk.github.io/mkdocs-material/">mkdocs-material</a> 를 사용합니다.
+<a href="https://mkdocstrings.github.io/python/">mkdocstrings</a> 또한 즐겨 사용합니다.
+<a href="https://facelessuser.github.io/pymdown-extensions/extensions/snippets/">pymdown/snippets</a> 도 읽어보시길 바랍니다.</p>
 
 
 
@@ -623,20 +728,15 @@
 
 
 
-  
-  
 
 
 
 
-  
 
-
-
-      
-    </article>
-  </div>
-
+                
+              </article>
+            </div>
+          
           
 <script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
         </div>
@@ -667,10 +767,10 @@
     </div>
     
     
-    <script id="__config" type="application/json">{"base": "../../../../..", "features": ["navigation.tabs"], "search": "../../../../../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    <script id="__config" type="application/json">{"base": "..", "features": ["navigation.tabs"], "search": "../assets/javascripts/workers/search.6ce7567c.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../../assets/javascripts/bundle.83f73b43.min.js"></script>
+      <script src="../assets/javascripts/bundle.83f73b43.min.js"></script>
       
     
   </body>

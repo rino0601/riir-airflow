@@ -1,26 +1,22 @@
 import asyncio
-from datetime import datetime
 import itertools
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TypedDict
 
-from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow import settings
 from airflow.api_internal.internal_api_call import InternalApiConfig
-from airflow.executors.executor_loader import ExecutorLoader
-from airflow.utils.state import JobState
-from airflow.stats import Stats
+from airflow.callbacks.pipe_callback_sink import PipeCallbackSink
 from airflow.configuration import conf
+from airflow.executors.executor_loader import ExecutorLoader
 from airflow.jobs.job import perform_heartbeat
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.dag import DAG
+from airflow.stats import Stats
+from airflow.utils import timezone
 from airflow.utils.event_scheduler import EventScheduler
 from airflow.utils.session import create_session
-
-from datetime import timedelta
-
-
-from airflow import settings
-from airflow.callbacks.pipe_callback_sink import PipeCallbackSink
-from airflow.models.dag import DAG
-from airflow.utils import timezone
+from airflow.utils.state import JobState
 
 
 class SchedulerStateDict(TypedDict):
@@ -205,7 +201,7 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
             )
 
         for loop_count in itertools.count(start=1):
-            self.log.info("Entering scheduler loop count %d", loop_count)
+            self.log.debug("Entering scheduler loop count %d", loop_count)
             with Stats.timer("scheduler.scheduler_loop_duration") as timer:
                 if self.using_sqlite and self.processor_agent:
                     self.processor_agent.run_single_parsing_loop()

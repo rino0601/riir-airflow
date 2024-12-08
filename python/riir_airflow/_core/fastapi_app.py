@@ -1,13 +1,11 @@
+from contextlib import asynccontextmanager
 from pprint import pformat
+from typing import TypedDict
+
+from airflow.jobs.job import Job
 from fastapi import FastAPI
 from fastapi.requests import Request
-from airflow.jobs.job import Job
-
-from typing import TypedDict
 from fastapi.responses import ORJSONResponse
-
-from contextlib import asynccontextmanager
-
 from riir_airflow._core.scheduler_loop import (
     AsyncSchedulerJobRunner,
 )

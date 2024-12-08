@@ -1,6 +1,6 @@
 import asyncio
-from asyncio.subprocess import Process
 import subprocess
+from asyncio.subprocess import Process
 from typing import TYPE_CHECKING, Any
 
 from airflow.executors.base_executor import BaseExecutor

@@ -8,11 +8,11 @@ version = "0.1.0"
 description = "Add your description here"
 dependencies = [
     "fastapi[standard]>=0.112.0",
-    "pydantic-settings>=2.2.1",
-    "typer>=0.12.3",
-    "apache-airflow>=2.9.1",
+    "pydantic-settings>=2.6.1",
+    "apache-airflow>=2.9.1,<2.10",
     "sh>=2.0.6",
     "orjson>=3.10.3",
+    "nicegui>=2.8.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
@@ -35,3 +35,6 @@ dev-dependencies = [
     "pytest>=8.3.3",
     "ruff>=0.6.8",
 ]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "B", "I"]

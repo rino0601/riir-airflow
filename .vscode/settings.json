@@ -10,11 +10,13 @@
         "**/target/**": true
     },
     "[python]": {
-        "editor.formatOnSave": true,
+        // formatOnSave 쓰면 codespace 가 자꾸 죽어버림. 
+        // "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "ruff.organizeImports": true,
-    "ruff.lint.run": "onSave",
+    // formatOnSave 쓰면 codespace 가 자꾸 죽어버림. 
+    // "ruff.lint.run": "onSave",
     "python.testing.pytestArgs": [
         "."
     ],

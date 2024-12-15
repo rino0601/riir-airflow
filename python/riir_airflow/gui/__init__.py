@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from nicegui import ui
+from nicegui import app, ui
 
 from .pages.api_router_example import router
 from .pages.class_example import ClassExample
@@ -11,7 +11,7 @@ def init(mount_path: str, fastapi_app: FastAPI) -> None:
     HomePage()
     ClassExample()
     FunctionExample()
-    fastapi_app.include_router(router)
+    app.include_router(router)
 
     ui.run_with(
         fastapi_app,

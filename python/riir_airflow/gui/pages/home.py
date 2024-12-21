@@ -15,7 +15,7 @@ class HomePage:
         def index_page() -> None:
             with frame("Homepage"):
                 ui.label("Hello, FastAPI!")
-                message("This is the home page.").classes("font-bold")
+                message("This is the h222ome page.").classes("font-bold")
                 ui.label("Use the menu on the top right to navigate.")
                 # NOTE dark mode will be persistent for each user across tabs and server restarts
                 ui.dark_mode().bind_value(app.storage.user, "dark_mode")

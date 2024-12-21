@@ -2,7 +2,7 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from riir_airflow.main import web_app
+from riir_airflow.asgi import app
 
 
 @pytest.fixture
@@ -18,4 +18,4 @@ def client():
     # # FastAPI TestClient 생성
     # with TestClient(web_app) as client:
     #     yield client
-    yield TestClient(web_app)
+    yield TestClient(app)

@@ -1,5 +1,5 @@
 {
-    "files.autoSave": "off",
+    "files.autoSave": "onFocusChange",
     "files.exclude": {
         "**/__pycache__": true
     },

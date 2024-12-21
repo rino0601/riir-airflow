@@ -41,6 +41,32 @@ Elixir 의 Phoenix LiveView 를 부러워 했었는데, python+fastapi 생태계
 - 재사용성을 위한 전략은 (extends 매크로 같은) https://github.com/zauberzeug/nicegui/tree/main/examples/modularization/ 를 볼 것.
 - 이거 패키지 디펜던시 충돌만 없다면, 회사에서도 쓸 수 있어 보임!
 
+## 기존 코드랑 어울리게
+- airflow 와 섞으면서
+- cli 와 섞으면서
+- dev 일 때 reload 할 수 있게 하면서
+- fastapi 의 예제를 따르면서..
+
+설정하는데 좀 까다로웠다.
+nicegui 탓 이라기 보다는 codespace 가 자꾸 죽어버려서 그랬고
+codespace 이외의 환경은 wsl 뿐인데, 이쪽은 sqlite 가 잘 작동하질 않는 파일 시스템이다.
+셋업만 반복하다가 코드를 짜는게 어려워졌었음.
+
+몇번의 시행 착오 끝에, 
+pydantic-setttings 를 이용해서 CLI 작성하는 노하우를 배울 수 있었다.
+
+그리고 웹소켓을 쓴다는 사실, 그래서 worker 가 1개로 고정되어야 한단 사실을 발견했다. 이러면 운영이 어려워지는데...? 뺄 수 있나?
+
+wsl 환경에서 작업하려면 && reload 를 가볍게 하려면 airflow 작동을 막아야 하는데, import 경로를 깔끔하게 분리하는게 필요하다.
+이는 같은날 하기엔 부담스러워서 포기. 일단 코드를 합치기로 마음 먹음.
+
+작업 하던 도중에 copilot 이 무료로 풀려서 취미 코딩에서도 쓸 수 있게 되었다.
+이거 때문에 codespace 작게 주나...?
+
+## airflow import 분리
+
+다음 기회에
+
 ## 내부 api 에 따라 동작하게 바꿔보자
 
 다음 기회에

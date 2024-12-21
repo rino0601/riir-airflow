@@ -18,7 +18,7 @@ readme = "README.md"
 requires-python = ">= 3.12"
 
 [project.scripts]
-riir-airflow = 'riir_airflow.main:cli_app'
+riir-airflow = 'riir_airflow.__main__:cli_app'
 
 [tool.maturin]
 python-source = "python"

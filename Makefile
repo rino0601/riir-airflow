@@ -25,7 +25,6 @@ help:
 	@echo "  test                  Run tests using pytest"
 	@echo "  format,format-check   Format code"
 	@echo "  lint,lint-fix         Lint code"
-	@echo "  type-check            Check types using pyright"
 	@echo "  clean,clean-hard      Clean build artifacts"
 
 # setup dependencies
@@ -56,11 +55,6 @@ lint:
 	ruff check
 lint-fix:
 	ruff check --fix
-
-# Check types with pyright
-.PHONY: type-check
-type-check: ensure-node
-	pyright
 
 # Run tests
 .PHONY: test

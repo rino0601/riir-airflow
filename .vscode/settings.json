@@ -1,5 +1,5 @@
 {
-    "files.autoSave": "onFocusChange",
+    "files.autoSave": "off",
     "files.exclude": {
         "**/__pycache__": true
     },
@@ -10,13 +10,11 @@
         "**/target/**": true
     },
     "[python]": {
-        // formatOnSave 쓰면 codespace 가 자꾸 죽어버림. 
-        // "editor.formatOnSave": true,
+        "editor.formatOnSave": true,
         "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "ruff.organizeImports": true,
-    // formatOnSave 쓰면 codespace 가 자꾸 죽어버림. 
-    // "ruff.lint.run": "onSave",
+    "ruff.lint.run": "onSave",
     "python.testing.pytestArgs": [
         "."
     ],
@@ -24,4 +22,5 @@
     "python.testing.pytestEnabled": true,
     "python.envFile": "${workspaceFolder}/.env",
     "makefile.configureOnOpen": false,
+    "python.analysis.languageServerMode": "default",
 }

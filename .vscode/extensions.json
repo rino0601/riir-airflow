@@ -1,7 +1,6 @@
 {
     "recommendations": [
-        // ruff 작동하면 codespace 가 죽어버림. 
-        // "charliermarsh.ruff",
+        "charliermarsh.ruff",
         "ms-vscode-remote.remote-containers",
         "ms-vscode.makefile-tools",
         "ms-python.python",

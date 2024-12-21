@@ -7,7 +7,7 @@ from .pages.function_example import FunctionExample
 from .pages.home import HomePage
 
 
-def init(mount_path: str, fastapi_app: FastAPI) -> None:
+def init(mount_path: str, fastapi_app: FastAPI) -> FastAPI:
     HomePage()
     ClassExample()
     FunctionExample()
@@ -18,3 +18,4 @@ def init(mount_path: str, fastapi_app: FastAPI) -> None:
         mount_path=mount_path,  # NOTE this can be omitted if you want the paths passed to @ui.page to be at the root
         storage_secret="pick your private secret here",  # NOTE setting a secret is optional but allows for persistent storage per user
     )
+    return fastapi_app

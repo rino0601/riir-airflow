@@ -10,7 +10,7 @@ run: venv
     echo SQLALCHEMY_SILENCE_UBER_WARNING=1 > .env
     echo AIRFLOW_HOME={{ absolute_path(".venv/airflow") }} >>.env
     echo AIRFLOW__LOGGING__LOGGING_LEVEL=INFO >>.env
-    echo AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor >>.env
+    echo AIRFLOW__CORE__EXECUTOR=airflow.providers.asgi.executors.asgi_executor.AsgiExecutor >>.env
     echo AIRFLOW__CORE__DAGS_FOLDER={{ absolute_path("./dags") }} >>.env
     echo AIRFLOW__CORE__LOAD_EXAMPLES=False >>.env
 

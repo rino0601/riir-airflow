@@ -3,9 +3,9 @@ from pydantic_settings import (
     CliSubCommand,
 )
 
-from riir_airflow.cli.serve import Serve
-from riir_airflow.cli.show import Show
-from riir_airflow.configuration import Settings
+from .cli.serve import Serve
+from .cli.show import Show
+from .configuration import Settings
 
 
 class CLI(Settings, cli_parse_args=True):

@@ -28,7 +28,7 @@ pip install riir-airflow apache-airflow-providers-apache-flink[cncf.kubernetes]
 ```diff
 # https://airflow.apache.org/docs/apache-airflow/stable/tutorial/taskflow.html 의 예제를 참고하세요.
 -from airflow.decorators import dag, task
-+from riir_airflow.decorators import dag, task
++from .decorators import dag, task
 # 그외 다른 모든 airflow 패키지도 앞에 riir_ 만 붙이면 작동 할 것
 # 즉, 찾아 바꾸기로 from airflow -> from riir_airflow 로 바꾸면 될 것
 ```

@@ -6,7 +6,8 @@ from pydantic_settings import (
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="RIIR_",
+        env_prefix="AIRFLOW__ASGI__",
+        env_nested_delimiter="__",
     )
 
     # Basic settings

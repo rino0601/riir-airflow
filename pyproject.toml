@@ -3,7 +3,7 @@ requires = ["maturin>=1.2,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "riir-airflow"
+name = "airflow-providers-asgi"
 version = "0.1.0"
 description = "Add your description here"
 dependencies = [
@@ -11,18 +11,16 @@ dependencies = [
     "pydantic-settings>=2.6.1",
     "apache-airflow>=2.9.1,<2.10",
     "sh>=2.0.6",
-    "orjson>=3.10.3",
-    "nicegui>=2.8.1",
 ]
 readme = "README.md"
 requires-python = ">= 3.12"
 
 [project.scripts]
-riir-airflow = 'riir_airflow.__main__:cli_app'
+asgirflow = 'airflow.providers.asgi.__main__:cli_app'
 
 [tool.maturin]
 python-source = "python"
-module-name = "riir_airflow._lowlevel"
+module-name = "airflow.providers.asgi._lowlevel"
 features = ["pyo3/extension-module"]
 
 [tool.uv]

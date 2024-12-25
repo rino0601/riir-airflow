@@ -1,0 +1,66 @@
+# # Makefile for managing a Python project with Rye
+# # Ensure virtual environment is activated
+# ifeq ($(VIRTUAL_ENV),)
+# $(error VIRTUAL_ENV is not set, please source .venv/bin/activate)
+# endif
+# # ENV
+# export SQLALCHEMY_SILENCE_UBER_WARNING=1
+# export AIRFLOW_HOME=$(VIRTUAL_ENV)/airflow
+# export AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
+# export AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
+# export AIRFLOW__CORE__DAGS_FOLDER=$(VIRTUAL_ENV)/dags
+# export AIRFLOW__CORE__LOAD_EXAMPLES=False
+# export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+# # Show help message(Default target; first present)
+# .PHONY: help
+# help:
+# 	@echo "Usage: make [target]"
+# 	@echo ""
+# 	@echo "Targets:"
+# 	@echo "  help                  Show this help message"
+# 	@echo "  setup                 setup dependencies using Uv"
+# 	@echo "  run                   Run the application (airflow standalone)"
+# 	@echo "  test                  Run tests using pytest"
+# 	@echo "  format,format-check   Format code"
+# 	@echo "  lint,lint-fix         Lint code"
+# 	@echo "  clean,clean-hard      Clean build artifacts"
+# # setup dependencies
+# .PHONY: setup update-all
+# configure:
+# 	@echo SQLALCHEMY_SILENCE_UBER_WARNING=$(SQLALCHEMY_SILENCE_UBER_WARNING) > .env
+# 	@echo AIRFLOW_HOME=$(AIRFLOW_HOME) >>.env
+# 	@echo AIRFLOW__LOGGING__LOGGING_LEVEL=$(AIRFLOW__LOGGING__LOGGING_LEVEL) >>.env
+# 	@echo AIRFLOW__CORE__EXECUTOR=$(AIRFLOW__CORE__EXECUTOR) >>.env
+# 	@echo AIRFLOW__CORE__DAGS_FOLDER=$(AIRFLOW__CORE__DAGS_FOLDER) >>.env
+# 	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+# 	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+
+set dotenv-load 
+set dotenv-required
+
+venv:
+    [ -d .venv ] || uv sync --frozen
+    .venv/bin/pre-commit install
+
+# format code. use --check to check without modifying
+format *FLAGS: venv
+    .venv/bin/ruff format {{ FLAGS }}
+
+# Lint code. use --fix to fix issues
+lint *FLAGS:
+    .venv/bin/ruff check {{ FLAGS }}
+
+# Run tests
+test *FLAGS:
+    .venv/bin/pytest {{ FLAGS }}
+
+docs:
+    .venv/bin/mkdocs serve
+
+docs-check:
+    .venv/bin/mkdocs build --strict
+
+# Clean build artifacts
+clean:
+    rm -rf .ruff_cache .pytest_cache .nicegui/ \
+    	$(VIRTUAL_ENV)/airflow

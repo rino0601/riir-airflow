@@ -1,64 +1,40 @@
-# # Makefile for managing a Python project with Rye
-# # Ensure virtual environment is activated
-# ifeq ($(VIRTUAL_ENV),)
-# $(error VIRTUAL_ENV is not set, please source .venv/bin/activate)
-# endif
-# # ENV
-# export SQLALCHEMY_SILENCE_UBER_WARNING=1
-# export AIRFLOW_HOME=$(VIRTUAL_ENV)/airflow
-# export AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
-# export AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
-# export AIRFLOW__CORE__DAGS_FOLDER=$(VIRTUAL_ENV)/dags
-# export AIRFLOW__CORE__LOAD_EXAMPLES=False
-# export AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
-# # Show help message(Default target; first present)
-# .PHONY: help
-# help:
-# 	@echo "Usage: make [target]"
-# 	@echo ""
-# 	@echo "Targets:"
-# 	@echo "  help                  Show this help message"
-# 	@echo "  setup                 setup dependencies using Uv"
-# 	@echo "  run                   Run the application (airflow standalone)"
-# 	@echo "  test                  Run tests using pytest"
-# 	@echo "  format,format-check   Format code"
-# 	@echo "  lint,lint-fix         Lint code"
-# 	@echo "  clean,clean-hard      Clean build artifacts"
-# # setup dependencies
-# .PHONY: setup update-all
-# configure:
-# 	@echo SQLALCHEMY_SILENCE_UBER_WARNING=$(SQLALCHEMY_SILENCE_UBER_WARNING) > .env
-# 	@echo AIRFLOW_HOME=$(AIRFLOW_HOME) >>.env
-# 	@echo AIRFLOW__LOGGING__LOGGING_LEVEL=$(AIRFLOW__LOGGING__LOGGING_LEVEL) >>.env
-# 	@echo AIRFLOW__CORE__EXECUTOR=$(AIRFLOW__CORE__EXECUTOR) >>.env
-# 	@echo AIRFLOW__CORE__DAGS_FOLDER=$(AIRFLOW__CORE__DAGS_FOLDER) >>.env
-# 	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
-# 	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
+set dotenv-load := true
+set dotenv-required := true
 
-set dotenv-load 
-set dotenv-required
+run: venv
+    .venv/bin/python -c "print('Hello, World!')"
 
+# make .env file use --no-dotenv to run this recipe in first time
+[confirm]
+@configure:
+    echo SQLALCHEMY_SILENCE_UBER_WARNING=1 > .env
+    echo AIRFLOW_HOME={{ absolute_path(".venv/airflow") }} >>.env
+    echo AIRFLOW__LOGGING__LOGGING_LEVEL=INFO >>.env
+    echo AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor >>.env
+    echo AIRFLOW__CORE__DAGS_FOLDER={{ absolute_path("./dags") }} >>.env
+    echo AIRFLOW__CORE__LOAD_EXAMPLES=False >>.env
+
+[private]
 venv:
     [ -d .venv ] || uv sync --frozen
-    .venv/bin/pre-commit install
+    [ -f .git/hooks/pre-commit ] || .venv/bin/pre-commit install --install-hooks
 
 # format code. use --check to check without modifying
 format *FLAGS: venv
+    .venv/bin/just --fmt --unstable
     .venv/bin/ruff format {{ FLAGS }}
 
 # Lint code. use --fix to fix issues
-lint *FLAGS:
+lint *FLAGS: venv
     .venv/bin/ruff check {{ FLAGS }}
+    .venv/bin/mkdocs build --strict
 
 # Run tests
-test *FLAGS:
+test *FLAGS: venv
     .venv/bin/pytest {{ FLAGS }}
 
-docs:
+docs: venv
     .venv/bin/mkdocs serve
-
-docs-check:
-    .venv/bin/mkdocs build --strict
 
 # Clean build artifacts
 clean:

@@ -6,13 +6,12 @@
                 "terminal.integrated.shell.linux": "/bin/zsh"
             },
             "extensions": [
-                // ruff 작동하면 codespace 가 죽어버림. 
-                // "charliermarsh.ruff",
                 "ms-vscode-remote.remote-containers",
                 "ms-vscode.makefile-tools",
                 "ms-python.python",
                 "tamasfe.even-better-toml",
-                "mhutchie.git-graph"
+                "mhutchie.git-graph",
+                "nefrob.vscode-just-syntax"
             ]
         }
     },

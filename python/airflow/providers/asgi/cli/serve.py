@@ -15,7 +15,7 @@ class Serve(BaseModel):
             print(line, end="")
 
     def cli_cmd(self) -> None:
-        from .configuration import settings
+        from ..configuration import settings
 
         match settings.mode:
             case "prod":

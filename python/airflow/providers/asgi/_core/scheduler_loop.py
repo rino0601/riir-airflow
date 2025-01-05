@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import TypedDict
 
 from airflow import settings
-from airflow.api_internal.internal_api_call import InternalApiConfig
 from airflow.callbacks.pipe_callback_sink import PipeCallbackSink
 from airflow.configuration import conf
 from airflow.executors.executor_loader import ExecutorLoader
@@ -40,7 +39,6 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
     async def __aenter__(self):
         """._execute() 의 앞부분 재현"""
         ExecutorLoader.validate_database_executor_compatibility(self.job.executor)
-        InternalApiConfig.force_database_direct_access()
 
         self.job.prepare_for_execution()  # session 유지 일단 포기해봄. (1)
 

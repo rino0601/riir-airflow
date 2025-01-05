@@ -7,9 +7,15 @@ repos:
         args: [--assume-in-merge]
   - repo: local
     hooks:
-      - id: make
-        name: make test
-        entry: make format lint-fix test
+      - id: lint
+        name: just lint
+        entry: .venv/bin/just lint --fix
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: format
+        name: just format
+        entry: .venv/bin/just format
         language: system
         pass_filenames: false
         always_run: true

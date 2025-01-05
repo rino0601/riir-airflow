@@ -2,7 +2,7 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from riir_airflow.asgi import app
+from providers.asgi import app
 
 
 @pytest.fixture
@@ -11,7 +11,7 @@ def client():
     assert "AIRFLOW__CORE__EXECUTOR" in os.environ
     assert (
         os.environ["AIRFLOW__CORE__EXECUTOR"]
-        == "riir_airflow.executors.asgi_executor.AsgiExecutor"
+        == "airflow.providers.asgi.executors.asgi_executor.AsgiExecutor"
     )
 
     # unittest 일때는 무한루프를 풀어야한다. 방법 알 때까지 일단 state 조회 기능은 포기

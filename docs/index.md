@@ -1,6 +1,6 @@
 # Welcome to MkDocs
 
-::: riir_airflow
+::: airflow.providers.asgi
     options:
       show_root_heading: true
       heading_level: 2

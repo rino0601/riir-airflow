@@ -6,7 +6,8 @@ from airflow.jobs.job import Job
 from fastapi import FastAPI
 from fastapi.requests import Request
 from fastapi.responses import ORJSONResponse
-from riir_airflow._core.scheduler_loop import (
+
+from .scheduler_loop import (
     AsyncSchedulerJobRunner,
 )
 

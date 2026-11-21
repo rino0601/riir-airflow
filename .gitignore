@@ -14,14 +14,11 @@ target/
 # cargo generated files
 *.so
 
-#mkdocs
+# Zensical
 site/
 
 # dotenv
 .env
-
-# NiceGUI
-.nicegui/
 
 # local tool caches
 .uv-cache/

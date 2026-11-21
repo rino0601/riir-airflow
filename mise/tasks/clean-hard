@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 캐시를 정리하고 가상환경을 처음부터 다시 만든다.
+mise run clean
+uv sync -f

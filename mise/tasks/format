@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Python 코드를 포맷한다.
+uv run ruff format .

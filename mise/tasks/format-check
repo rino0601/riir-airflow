@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Python 코드 포맷을 검사한다.
+uv run ruff format --check .

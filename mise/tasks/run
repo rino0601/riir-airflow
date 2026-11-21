@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 개발 환경을 준비한 뒤 애플리케이션을 실행한다.
+mise run setup
+uv run riir-airflow

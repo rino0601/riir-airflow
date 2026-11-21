@@ -3,11 +3,9 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.wsgi import WSGIMiddleware
-from fastapi.responses import RedirectResponse
 
 from riir_airflow._core.fastapi_app import web_app as _fastapi_app
 from riir_airflow.configuration import settings
-from riir_airflow.gui import init as _init_gui
 
 
 def _init_af(mount_path: str, fastapi_app: FastAPI) -> FastAPI:
@@ -42,17 +40,9 @@ def _init_af(mount_path: str, fastapi_app: FastAPI) -> FastAPI:
 
 
 def _init_web_app() -> FastAPI:
-    # Initialize the GUI and Airflow
-    app = _init_gui("/gui", _fastapi_app)
     if settings.mode != "dev":
-        app = _init_af("/airflow", app)
-
-    # Define the redirect route
-    @app.get("/")
-    async def redirect_to_gui():
-        return RedirectResponse(url="/gui")
-
-    return app
+        return _init_af("/airflow", _fastapi_app)
+    return _fastapi_app
 
 
 app = _init_web_app()

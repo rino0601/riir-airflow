@@ -18,15 +18,15 @@
 
 ## Airflow 환경 변수
 
-`make configure`가 생성하는 `.env`에 다음 값이 기록됩니다. `Makefile`이 `uv run make ...` 실행 시 내보내는 값과 같습니다.
+`mise run configure`가 생성하는 `.env`에 다음 값이 기록됩니다.
 
 | 이름 | 값 |
 | --- | --- |
 | `SQLALCHEMY_SILENCE_UBER_WARNING` | `1` |
-| `AIRFLOW_HOME` | `$(VIRTUAL_ENV)/airflow` |
+| `AIRFLOW_HOME` | `.venv/airflow` |
 | `AIRFLOW__LOGGING__LOGGING_LEVEL` | `INFO` |
 | `AIRFLOW__CORE__EXECUTOR` | `riir_airflow.executors.asgi_executor.AsgiExecutor` |
-| `AIRFLOW__CORE__DAGS_FOLDER` | `$(VIRTUAL_ENV)/dags` |
+| `AIRFLOW__CORE__DAGS_FOLDER` | `.venv/dags` |
 | `AIRFLOW__CORE__LOAD_EXAMPLES` | `False` |
 | `AIRFLOW__WEBSERVER__EXPOSE_CONFIG` | `True` |
 
@@ -35,13 +35,18 @@
 | 명령 | 동작 |
 | --- | --- |
 | `mise run setup` | `uv sync`, `.env` 생성, prek 훅 설치 |
-| `mise run check` | prek 검사, 테스트, Zensical 빌드 |
+| `mise run check` | prek 설정 검사, 포맷/린트, 테스트, Zensical 빌드 |
 | `mise run build` | maturin으로 pyo3 확장 모듈 빌드 |
-| `make format-check` | `ruff format --check` |
-| `make lint` | `ruff check` |
-| `make test` | `pytest` |
-| `make docs` | `zensical serve` |
-| `make docs-check` | `zensical build` |
+| `mise run format` | `ruff format` |
+| `mise run format-check` | `ruff format --check` |
+| `mise run lint` | `ruff check` |
+| `mise run lint-fix` | `ruff check --fix` |
+| `mise run test` | `pytest` |
+| `mise run docs` | `zensical serve` |
+| `mise run docs-check` | `zensical build` |
+| `mise run run` | 애플리케이션 실행 |
+| `mise run clean` | 로컬 캐시와 Airflow 상태 정리 |
+| `mise run clean-hard` | 캐시 정리 후 가상환경 재생성 |
 
 ## 버전
 

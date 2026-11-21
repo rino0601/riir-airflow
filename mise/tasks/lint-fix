@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Python 코드 린트 문제를 자동 수정한다.
+uv run ruff check --fix .

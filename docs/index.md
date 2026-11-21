@@ -50,7 +50,7 @@ tutorial_taskflow_api()
 ```sh
 mise install         # uv와 Rust 툴체인 설치
 mise run setup       # 의존성 동기화, .env 생성, prek 훅 설치
-mise run check       # prek 검사, 테스트, 문서 빌드
+mise run check       # prek 설정 검사, 포맷/린트, 테스트, 문서 빌드
 cargo check          # Rust 확장 모듈 확인
 uv run pytest        # Python 테스트
 ```

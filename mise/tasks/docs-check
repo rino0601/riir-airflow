@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 문서 사이트를 빌드한다.
+uv run zensical build

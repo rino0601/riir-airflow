@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# uv가 만든 가상환경을 기준으로 Airflow 환경 변수를 .env에 기록한다.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+venv="${VIRTUAL_ENV:-$root/.venv}"
+
+cat > "$root/.env" <<EOF
+SQLALCHEMY_SILENCE_UBER_WARNING=1
+AIRFLOW_HOME=$venv/airflow
+AIRFLOW__LOGGING__LOGGING_LEVEL=INFO
+AIRFLOW__CORE__EXECUTOR=riir_airflow.executors.asgi_executor.AsgiExecutor
+AIRFLOW__CORE__DAGS_FOLDER=$venv/dags
+AIRFLOW__CORE__LOAD_EXAMPLES=False
+AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True
+EOF

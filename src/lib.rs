@@ -8,7 +8,7 @@ fn hello() -> PyResult<String> {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn _lowlevel(_py: Python, m: &PyModule) -> PyResult<()> {
+fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello, m)?)?;
     Ok(())
 }

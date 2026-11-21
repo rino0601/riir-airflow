@@ -1,7 +1,7 @@
 # riir-airflow
 
 > [!CAUTION]
-> This project is very^3 early stages of development. 
+> This project is very^3 early stages of development.
 > Among the things listed in the document, there are far more things that haven't been done than have been done.
 
 Rewrite airflow in rust. it might be help to simplify to operate airflow.

@@ -10,7 +10,7 @@ repo 를 여는 시점에, 이 프로젝트는 4가지 목표를 가지고 있�
 
 ### (nearly) drop-in-replacement for apache-airflow
 
-- riir-airflow 는 [Public Interface of Airflow](https://airflow.apache.org/docs/apache-airflow/stable/public-airflow-interface.html) 를 준수 해야 합니다. 
+- riir-airflow 는 [Public Interface of Airflow](https://airflow.apache.org/docs/apache-airflow/stable/public-airflow-interface.html) 를 준수 해야 합니다.
 - 따라서 airflow 커뮤니티의 puglins, providers 를 계속 사용할 수 있을 것 입니다.
 
 간단히 예를 들자면, 아래와 같은 provider 설치는 유효할 것입니다.
@@ -59,7 +59,7 @@ production level apache-airflow 는 5 ~ 9 가지 컴포넌트로 이루어져 �
 - broker (webserver, pg bouncer 그리고 아래의 컴포넌트들 discovery )
 - DAG as a APP (한 dag.py 만을 위한 별도의 컴포넌트. broker 와 1 to many 관계)
 
-이를 달성하기 위해 처음부터 async 하게끔 작성하고, 제한을 설정 합니다. (한계3) 
+이를 달성하기 위해 처음부터 async 하게끔 작성하고, 제한을 설정 합니다. (한계3)
 
 ### simplify python dependency
 
@@ -148,13 +148,13 @@ https://peps.python.org/pep-0554/
 저는 2017년 첫 입사 후, 지금(2024년 5월)까지 본업에서 apache-airflow 를 쓰고 있습니다.
 오래된 기업이 그러하듯, 늘 끔찍한 레거시와 싸우는게, 재밌는 새 도구 도입하는 것보다 훨씬 일의 양이 많기 때문에... airflow 를 7년이나 써왔지만, airflow 의 모든 기능에 대해 정통하진 않습니다.
 
-그럴 이유가, 1.7.1.3 (세상에 이제 pypi 에서 조회 조차 안되네요 / timezone 기능이 없고 utc 아닌 시스템 time 을 그대로 따르는 마지막 버젼입니다.) 버젼에서 너무 오래 있었고, 1.10.15로 단숨에 점프시키는데 3년 가까운 시간을 썼습니다. 이 과정에서 airflow 1.x 의 코드는 전부 읽고 이해 하는 과정이 필요 했습니다. `airflow scheduler` 명령이 시작하는 순간부터 워커에서 작업이 완료되는 순간까지 모든 부분의 코드를 찾아내는데 도가 텄었죠. 이 때의 저는 airflow 1.10.15 를 완전히 이해 했다고 자신합니다. 
+그럴 이유가, 1.7.1.3 (세상에 이제 pypi 에서 조회 조차 안되네요 / timezone 기능이 없고 utc 아닌 시스템 time 을 그대로 따르는 마지막 버젼입니다.) 버젼에서 너무 오래 있었고, 1.10.15로 단숨에 점프시키는데 3년 가까운 시간을 썼습니다. 이 과정에서 airflow 1.x 의 코드는 전부 읽고 이해 하는 과정이 필요 했습니다. `airflow scheduler` 명령이 시작하는 순간부터 워커에서 작업이 완료되는 순간까지 모든 부분의 코드를 찾아내는데 도가 텄었죠. 이 때의 저는 airflow 1.10.15 를 완전히 이해 했다고 자신합니다.
 
-airflow 2.x 로의 마이그레이션도 1.7 에서 1.10 가는 것 만큼이나 어려웠습니다. 
+airflow 2.x 로의 마이그레이션도 1.7 에서 1.10 가는 것 만큼이나 어려웠습니다.
 1.7에서 1.10으로 넘길때와 다르게, 회사에서는 저를 더이상 주니어로 취급하지 않았고, 주어진 시간은 촉박했습니다.
 airflow 2.x 의 핵심적인 변경이 무엇인지 이해할 시간은 주어지지 않았고, 마이그레이션 가이드를 안전하게 서비스 인스턴스에 적용하는데 집중하게 됩니다.
 저 혼자 회사에서 쓰는 수십개의 1.10.15 인스턴스들을 안전하게 2.3.4 를 거쳐 2.4.3 으로 올리는데 고군 분투 하는 사이에, apache-airflow 는 오픈소스의 힘=다수의 협력을 통해 2.9.1 까지 진행 했습니다. (그 사이 -운좋게 KPI가 그렇게 설정되었기에- 컨트리뷰트도 2번쯤인가 했죠. 모두 timezone 관련입니다. 그런 레거시와 싸울 사람만 겪을 수 있는 불편이었던 거죠.)
-때문에 제 지식은 2.4 버젼에 머물러 있습니다. 
+때문에 제 지식은 2.4 버젼에 머물러 있습니다.
 그리고 이전과 달리, airflow 가 스케쥴링 하는 과정을 이해한다 자신할 수 없습니다. HA 가능해진 스케쥴러들이 어떻게 그게 가능해졌고, 어떻게 서로 충돌을 피하는지에 대해 자신있게 답하지 못합니다. (postgresql가 제공 하는 lock 에 의존하나? 정도로 이해하고 있습니다만), 스케쥴러 에러로그에서 나타난 문장을 보고 어떤 옵션을 조절해야겠다 판단 할 수 없습니다.
 회사에서 시키는 일만 하다가는 제논의 역설마냥 영원히 최신버젼 airflow 에 정통하지 못한 사람이 될 겁니다.
 토이 프로젝트는 내 마음대로 내 여가시간에 하는 거니, 내가 마음껏 airflow 2.x 의 스케쥴러 코드를 보는데 시간을 써도 뭐라할 사람이 없을겁니다.
@@ -218,7 +218,7 @@ python 디펜던시 줄이기를 위해 코어 로직을 rust 화 하기 시작�
 
 python 디펜던시를 멸종시키기 위해 interface 또한 rust 화 하기 시작합니다.
 
-FastAPI 가 걱정되는 부분인데, robyn 이란 프로젝트가 이 시점 쯤에 기대하는 수준으로 올라와 있기를 기대 해봅니다. 
+FastAPI 가 걱정되는 부분인데, robyn 이란 프로젝트가 이 시점 쯤에 기대하는 수준으로 올라와 있기를 기대 해봅니다.
 https://robyn.tech/documentation/api_reference/future-roadmap
 
 https://github.com/emmett-framework/granian 의 사례도 참고해 볼만 합니다. (crates 로 공개 되어 있진 않지만)
@@ -228,4 +228,3 @@ https://github.com/emmett-framework/granian 의 사례도 참고해 볼만 합�
 ### 6단계 - what's next?
 
 이 프로젝트 아이디어를 정리하는 2024년 5월 시점에, 감히 이 너머를 계획할 수는 없습니다.
-

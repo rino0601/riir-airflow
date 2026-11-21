@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# pyo3 확장 모듈을 maturin으로 빌드한다.
+uv run --with 'maturin>=1.16,<2.0' maturin build

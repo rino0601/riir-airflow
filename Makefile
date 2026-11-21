@@ -1,4 +1,4 @@
-# Makefile for managing a Python project with Rye
+# Makefile for managing a Python project with uv
 # Ensure virtual environment is activated
 ifeq ($(VIRTUAL_ENV),)
 $(error VIRTUAL_ENV is not set, please source .venv/bin/activate)
@@ -20,11 +20,13 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  help                  Show this help message"
-	@echo "  setup                 setup dependencies using Uv"
+	@echo "  configure             Write .env for Airflow"
+	@echo "  setup                 Sync dependencies and install prek hooks"
 	@echo "  run                   Run the application (airflow standalone)"
 	@echo "  test                  Run tests using pytest"
 	@echo "  format,format-check   Format code"
 	@echo "  lint,lint-fix         Lint code"
+	@echo "  docs,docs-check       Serve/build the Zensical site"
 	@echo "  clean,clean-hard      Clean build artifacts"
 
 # setup dependencies
@@ -36,16 +38,15 @@ configure:
 	@echo AIRFLOW__CORE__EXECUTOR=$(AIRFLOW__CORE__EXECUTOR) >>.env
 	@echo AIRFLOW__CORE__DAGS_FOLDER=$(AIRFLOW__CORE__DAGS_FOLDER) >>.env
 	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
-	@echo AIRFLOW__CORE__LOAD_EXAMPLES=$(AIRFLOW__CORE__LOAD_EXAMPLES) >>.env
-	
+
 setup: configure
 	uv sync --frozen
-	uv run pre-commit install
+	uv run prek install --force --allow-missing-config --hook-command 'uv run prek'
 
 # Format code
 .PHONY: format format-check
 format:
-	ruff format 
+	ruff format
 format-check:
 	ruff format --check
 
@@ -58,14 +59,14 @@ lint-fix:
 
 # Run tests
 .PHONY: test
-test: setup format-check lint
+test:
 	pytest
 
 .PHONY: docs docs-check
 docs:
-	mkdocs serve
+	uv run zensical serve
 docs-check:
-	mkdocs build --strict
+	uv run zensical build
 
 # Run the application
 .PHONY: run
@@ -78,5 +79,4 @@ clean:
 	rm -rf .ruff_cache .pytest_cache .nicegui/ \
 		$(VIRTUAL_ENV)/airflow
 clean-hard: clean
-	rye sync -f
-
+	uv sync -f

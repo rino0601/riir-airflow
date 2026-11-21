@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# prek 설정 검사 → 전체 파일 훅 → 테스트 → 문서 빌드 순서로 실행한다.
+uv run prek validate-config prek.toml
+uv run prek run --all-files
+uv run make test
+uv run zensical build

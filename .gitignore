@@ -22,3 +22,7 @@ site/
 
 # NiceGUI
 .nicegui/
+
+# local tool caches
+.uv-cache/
+.mise.local.toml

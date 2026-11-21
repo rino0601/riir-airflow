@@ -22,10 +22,10 @@ codespace 환경에서 다음을 따라하면 됨.
 sudo apt update
 sudo apt install erlang-dev elixir
 
-command -v iex mix elixir 
+command -v iex mix elixir
 ```
 
-근데 현 시점 elixir 문서는 1.17, OTP 24 이나... codespace 에서 별다른 조치 안하고 설치한 apt 설치로는 
+근데 현 시점 elixir 문서는 1.17, OTP 24 이나... codespace 에서 별다른 조치 안하고 설치한 apt 설치로는
 
 1.9 에 OTP 22 로 설치된다. 너무 낮아서 가이드 따라하는데 걸림돌이 생길 듯 하다.
 
@@ -49,8 +49,8 @@ asdf plugin-add elixir https://github.com/asdf-vm/asdf-elixir.git
 
 asdf install erlang latest
 asdf install elixir latest
-asdf local erlang latest  
-asdf local elixir latest  
+asdf local erlang latest
+asdf local elixir latest
 asdf current
 ```
 
@@ -88,11 +88,11 @@ APPLICATIONS INFORMATION (See: /home/codespace/.asdf/plugins/erlang/kerl-home/bu
 riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf current
 elixir          1.17.3-otp-27   /workspaces/riir-airflow/.tool-versions
 erlang          27.1.1          /workspaces/riir-airflow/.tool-versions
-riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf exec elixir -v      
+riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ asdf exec elixir -v
 Erlang/OTP 27 [erts-15.1.1] [source] [64-bit] [smp:2:2] [ds:2:2:10] [async-threads:1] [jit:ns]
 
 Elixir 1.17.3 (compiled with Erlang/OTP 27)
-riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $ 
+riir-airflow@rino0601 ➜ /workspaces/riir-airflow (tour-elixir) $
 ```
 
 쉘을 닫고 새로 여니, nodeenv 랑 asdf 랑 궁합이 맞지 않는다는걸 발견했다.
@@ -108,7 +108,7 @@ Run `unset NPM_CONFIG_PREFIX` to unset it.
 
 https://hexdocs.pm/elixir/introduction-to-mix.html 를 따라해보았다. elixir 프로젝트는 어떻게 만드는가?
 
-`mix new kv --module KV` 하여 코드를 만들었고, 파일 확장자는 인식 되나 syntax highlight 는 자동으로 되지 않았다. 
+`mix new kv --module KV` 하여 코드를 만들었고, 파일 확장자는 인식 되나 syntax highlight 는 자동으로 되지 않았다.
 
 관련 vscode 익스텐션을 찾자 -> 제일 위가 쓸만해보이고 믿음직해보여서 설치.
 
@@ -144,7 +144,7 @@ phoenix 또는 elixir 문서 어딘가를 잘 둘러보면 설명이 되어 있�
 
 지금까지의 인상으로는...
 
-phoenix 를 통해서 개발 생산성을 높힐 수 있어보인다. 
+phoenix 를 통해서 개발 생산성을 높힐 수 있어보인다.
 한 가지 언어로 프론트와 백엔드 모두 처리할 수 있다.
 그럼 node 랑 같은거 아냐? 싶은데, node 는 프론트가 백엔드로 밀고 들어온 것이고, elixir 는 그 반대 같은 느낌..?
 백엔드쪽 문제가 운영이나 비용문제에 있어서 더 기여도가 크다고 생각하기 때문에, 이쪽이 훨씬 매력적인듯 하다.
@@ -156,4 +156,3 @@ phoenix 를 통해서 개발 생산성을 높힐 수 있어보인다.
 그러나 여전히 언어 철학은 매력적이고 rust 보다 쉬워보이는건 사실이며, 유용해보이긴 한다.
 
 좀 더 쉬운 주제 없을까?
-

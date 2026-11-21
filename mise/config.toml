@@ -1,0 +1,8 @@
+[tools]
+uv = "0.13.9"
+# pyo3/maturin 빌드용 최신 안정 Rust 툴체인 (pyo3 0.30의 MSRV 1.85 이상)
+rust = "1.100.0"
+
+[env]
+# Python은 uv가 관리, rust는 pyo3/maturin 빌드용
+UV_PYTHON = "3.13"

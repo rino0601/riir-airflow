@@ -24,7 +24,7 @@ uv가 `uv.lock`을 기준으로 의존성을 동기화하고, `.env`에 Airflow 
 uv run pytest
 ```
 
-`test/test_fastapi.py`의 테스트가 통과하면 준비가 끝났습니다. `/gui`와 `/show`를 제공하는 ASGI 앱이 정상적으로 만들어진 것입니다.
+`test/test_fastapi.py`의 테스트가 통과하면 준비가 끝났습니다. Airflow 앱 위주로 남은 ASGI 앱이 정상적으로 만들어진 것입니다.
 
 ## 4. 전체 검사
 
@@ -32,6 +32,6 @@ uv run pytest
 mise run check
 ```
 
-prek 설정 검사, 전체 파일 훅, pytest, Zensical 문서 빌드가 순서대로 실행됩니다. `site/`에 문서 사이트가 생성되면 성공입니다.
+prek 설정 검사, 포맷/린트, pytest, Zensical 문서 빌드가 순서대로 실행됩니다. `site/`에 문서 사이트가 생성되면 성공입니다.
 
 이제 [기여하기](../how-to/contributing.md)에서 커밋 전 흐름을 확인하세요.

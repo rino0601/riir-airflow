@@ -9,7 +9,7 @@ mise install
 mise run setup
 ```
 
-uv가 Python 3.13과 의존성을 관리하고, prek이 git pre-commit 훅을 설치합니다.
+uv가 Python 3.13과 의존성을 관리하고, prek이 git 커밋 훅을 설치합니다.
 
 ## 2. 코드 수정 후 검사하기
 
@@ -17,9 +17,9 @@ uv가 Python 3.13과 의존성을 관리하고, prek이 git pre-commit 훅을 �
 mise run check
 ```
 
-이 명령은 `prek validate-config`, `prek run --all-files`, `make test`, `zensical build`를 순서대로 실행합니다. 하나라도 실패하면 커밋하기 전에 원인을 고칩니다.
+이 명령은 `prek validate-config`, `ruff format --check`, `ruff check`, `pytest`, `zensical build`를 순서대로 실행합니다. 하나라도 실패하면 커밋하기 전에 원인을 고칩니다.
 
-훅만 따로 확인하려면 다음 명령을 씁니다.
+훅 설정만 따로 확인하려면 다음 명령을 씁니다.
 
 ```sh
 uv run prek validate-config prek.toml
@@ -34,6 +34,6 @@ git commit -m "설명 있는 커밋 메시지"
 git push
 ```
 
-pre-commit 훅이 `uv run make format-check lint test`를 자동으로 실행합니다. GitHub에서 PR을 열면 CI가 같은 검사와 문서 빌드를 다시 수행합니다.
+git 커밋 훅이 `uv run mise run check`를 자동으로 실행합니다. GitHub에서 PR을 열면 CI가 같은 검사와 문서 빌드를 다시 수행합니다.
 
-원래 기여 안내는 [.github/CONTRIBUTING.md](https://github.com/rino0601/riir-airflow/blob/main/.github/CONTRIBUTING.md)에도 있습니다. 문서 사이트는 Zensical로 빌드되므로 MkDocs 전용 문법 대신 일반 Markdown을 사용하세요.
+원래 기여 안내는 [.github/CONTRIBUTING.md](https://github.com/rino0601/riir-airflow/blob/main/.github/CONTRIBUTING.md)에도 있습니다. 문서 사이트는 Zensical로 빌드되므로 일반 Markdown을 사용하세요.

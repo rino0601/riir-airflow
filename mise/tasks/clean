@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 로컬 캐시와 Airflow 상태를 정리한다.
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+venv="${VIRTUAL_ENV:-$root/.venv}"
+
+rm -rf "$root/.ruff_cache" "$root/.pytest_cache" "$venv/airflow"

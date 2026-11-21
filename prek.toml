@@ -12,14 +12,14 @@ hooks = [
     { id = "check-merge-conflict", args = ["--assume-in-merge"] },
 ]
 
-# 기존 "make test" 훅을 prek 로컬 훅으로 대체한다.
+# 저장소 검사의 단일 진입점인 mise run check를 커밋 훅에서 호출한다.
 [[repos]]
 repo = "local"
 
 [[repos.hooks]]
-id = "make-test"
-name = "make test"
-entry = "uv run make format-check lint test"
+id = "mise-check"
+name = "mise run check"
+entry = "uv run mise run check"
 language = "system"
 pass_filenames = false
 always_run = true

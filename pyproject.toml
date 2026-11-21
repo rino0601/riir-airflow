@@ -12,7 +12,6 @@ dependencies = [
     "apache-airflow>=3.4",
     "sh>=2.4.0",
     "orjson>=3.13.0",
-    "nicegui>=4.0.0",
 ]
 readme = "README.md"
 requires-python = ">=3.13"

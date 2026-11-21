@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from riir_airflow.asgi import app
 
-# `uv run pytest`로 바로 실행해도 Makefile과 같은 Airflow 설정을 사용한다.
+# `uv run pytest`로 바로 실행해도 mise run configure와 같은 Airflow 설정을 사용한다.
 _project_root = Path(__file__).resolve().parents[1]
 _venv = _project_root / ".venv"
 os.environ.setdefault("SQLALCHEMY_SILENCE_UBER_WARNING", "1")
@@ -28,8 +28,4 @@ def client():
         == "riir_airflow.executors.asgi_executor.AsgiExecutor"
     )
 
-    # unittest 일때는 무한루프를 풀어야한다. 방법 알 때까지 일단 state 조회 기능은 포기
-    # # FastAPI TestClient 생성
-    # with TestClient(web_app) as client:
-    #     yield client
     yield TestClient(app)

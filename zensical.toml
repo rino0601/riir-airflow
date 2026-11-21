@@ -1,0 +1,41 @@
+[project]
+site_name = "Riir Airflow"
+site_description = "Rust와 Python으로 다시 만드는 Airflow"
+site_url = "https://rino0601.github.io/riir-airflow/"
+repo_url = "https://github.com/rino0601/riir-airflow"
+site_dir = "site"
+
+nav = [
+    { "홈" = "index.md" },
+    { "튜토리얼" = [
+        { "개발 환경 시작하기" = "tutorials/getting-started.md" },
+    ]},
+    { "실전 가이드" = [
+        { "기여하기" = "how-to/contributing.md" },
+    ]},
+    { "레퍼런스" = [
+        { "CLI와 설정" = "reference/cli-and-configuration.md" },
+    ]},
+    { "설명" = [
+        { "Diátaxis 4분류 개요" = "explanation/diataxis.md" },
+        { "git 훅과 --hook-command" = "explanation/hook-command.md" },
+    ]},
+    { "블로그" = [
+        { "블로그 홈" = "blog/index.md" },
+        { "2024-05-06" = "blog/posts/2024-05-06.md" },
+        { "2024-05-07" = "blog/posts/2024-05-07.md" },
+        { "2024-05-11" = "blog/posts/2024-05-11.md" },
+        { "2024-05-13" = "blog/posts/2024-05-13.md" },
+        { "2024-05-23" = "blog/posts/2024-05-23.md" },
+        { "2024-06-08" = "blog/posts/2024-06-08.md" },
+        { "2024-06-09" = "blog/posts/2024-06-09.md" },
+        { "2024-06-24" = "blog/posts/2024-06-24.md" },
+        { "2024-06-30" = "blog/posts/2024-06-30.md" },
+        { "2024-07-29" = "blog/posts/2024-07-29.md" },
+        { "2024-08-07" = "blog/posts/2024-08-07.md" },
+        { "NiceUI" = "blog/posts/niceui.md" },
+        { "개발 환경을 위한 postgresql 설치법" = "blog/posts/postgres-localhost-for-devel.md" },
+        { "elixir 연습을 위한 작은 목표" = "blog/posts/tiny-proj-for-elixir.md" },
+        { "Elixir 체험" = "blog/posts/tour-for-elixir.md" },
+    ]},
+]

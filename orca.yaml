@@ -1,0 +1,4 @@
+scripts:
+  setup: mise run setup
+
+setupAgentStartupPolicy: wait-for-setup

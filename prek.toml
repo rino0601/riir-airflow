@@ -1,0 +1,25 @@
+#:schema https://www.schemastore.org/prek.json
+
+# 저장소 전체에 적용하는 최소 훅 모음.
+[[repos]]
+repo = "builtin"
+hooks = [
+    { id = "trailing-whitespace" },
+    { id = "end-of-file-fixer" },
+    { id = "check-yaml" },
+    { id = "check-toml" },
+    # inline conflict marker 방지 (기존 check-merge-conflict 설정 계승)
+    { id = "check-merge-conflict", args = ["--assume-in-merge"] },
+]
+
+# 기존 "make test" 훅을 prek 로컬 훅으로 대체한다.
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "make-test"
+name = "make test"
+entry = "uv run make format-check lint test"
+language = "system"
+pass_filenames = false
+always_run = true

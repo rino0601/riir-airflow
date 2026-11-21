@@ -18,7 +18,7 @@ uv 를 이용한 monorepo python 프로젝트이며, rust 바인딩을 사용할
 
 make
 
-`make run` 으로 개발 모드로 구동해 볼 수 있습니다. 
+`make run` 으로 개발 모드로 구동해 볼 수 있습니다.
 
 그외 다른 사용법은 `uv run make` 하면 설명이 기재되어 있습니다.
 
@@ -36,6 +36,6 @@ git config --global core.editor "vim"  # codespace 에서는 기본 환경변수
 
 ### docs
 
-[mkdocs-material](https://squidfunk.github.io/mkdocs-material/) 를 사용합니다.
-[mkdocstrings](https://mkdocstrings.github.io/python/) 또한 즐겨 사용합니다.
-[pymdown/snippets](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/) 도 읽어보시길 바랍니다.
+[Zensical](https://zensical.org/) 로 문서 사이트를 만듭니다. 설정은 `zensical.toml`, 원고는 `docs/` 아래에 있습니다.
+문서는 [Diátaxis](https://diataxis.fr/) 4분류(튜토리얼, how-to, 레퍼런스, 설명)에 따라 나누고, 한 문서에 한 모드만 적용합니다.
+`uv run zensical build` 로 `site/` 에 산출물을 만들고, `uv run zensical serve` 로 미리 볼 수 있습니다.

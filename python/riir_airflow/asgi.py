@@ -12,7 +12,11 @@ from riir_airflow.gui import init as _init_gui
 
 def _init_af(mount_path: str, fastapi_app: FastAPI) -> FastAPI:
     from airflow.utils import db
-    from airflow.www.app import cached_app
+
+    try:  # Airflow 2의 Flask UI. Airflow 3에서는 FastAPI 앱을 쓴다.
+        from airflow.www.app import cached_app
+    except ImportError:
+        from airflow.api_fastapi.app import cached_app
 
     already_initialized = Path(
         os.environ["AIRFLOW_HOME"], "standalone_admin_password.txt"
@@ -29,8 +33,11 @@ def _init_af(mount_path: str, fastapi_app: FastAPI) -> FastAPI:
         with get_application_builder() as appbuilder:
             user_name, password = appbuilder.sm.create_admin_standalone()
 
-    flask_app = cached_app()
-    fastapi_app.mount(mount_path, WSGIMiddleware(flask_app))
+    airflow_app = cached_app()
+    if isinstance(airflow_app, FastAPI):
+        fastapi_app.mount(mount_path, airflow_app)
+    else:
+        fastapi_app.mount(mount_path, WSGIMiddleware(airflow_app))
     return fastapi_app
 
 

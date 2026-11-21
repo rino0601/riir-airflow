@@ -5,8 +5,6 @@ from pathlib import Path
 from typing import TypedDict
 
 from airflow import settings
-from airflow.api_internal.internal_api_call import InternalApiConfig
-from airflow.callbacks.pipe_callback_sink import PipeCallbackSink
 from airflow.configuration import conf
 from airflow.executors.executor_loader import ExecutorLoader
 from airflow.jobs.job import perform_heartbeat
@@ -17,6 +15,16 @@ from airflow.utils import timezone
 from airflow.utils.event_scheduler import EventScheduler
 from airflow.utils.session import create_session
 from airflow.utils.state import JobState
+
+try:  # Airflow 2 호환 경로. Airflow 3에서는 내부 API 설정이 사라졌다.
+    from airflow.api_internal.internal_api_call import InternalApiConfig
+except ImportError:
+    InternalApiConfig = None
+
+try:  # Airflow 3에서는 pipe callback sink가 제거되었다.
+    from airflow.callbacks.pipe_callback_sink import PipeCallbackSink
+except ImportError:
+    PipeCallbackSink = None
 
 
 class SchedulerStateDict(TypedDict):
@@ -40,7 +48,8 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
     async def __aenter__(self):
         """._execute() 의 앞부분 재현"""
         ExecutorLoader.validate_database_executor_compatibility(self.job.executor)
-        InternalApiConfig.force_database_direct_access()
+        if InternalApiConfig is not None:
+            InternalApiConfig.force_database_direct_access()
 
         self.job.prepare_for_execution()  # session 유지 일단 포기해봄. (1)
 
@@ -99,7 +108,7 @@ class AsyncSchedulerJobRunner(SchedulerJobRunner):
 
         # try: # 일단 포기
         self.job.executor.job_id = self.job.id
-        if self.processor_agent:
+        if self.processor_agent and PipeCallbackSink is not None:
             self.log.debug("Using PipeCallbackSink as callback sink.")
             self.job.executor.callback_sink = PipeCallbackSink(
                 get_sink_pipe=self.processor_agent.get_callbacks_pipe

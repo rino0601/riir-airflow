@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# uv로 의존성을 동기화하고 .env를 만든 뒤 버전 경로에 묶이지 않는 prek 훅을 설치한다.
+uv sync
+uv run make configure
+uv run prek install --force --allow-missing-config --hook-command 'uv run prek'

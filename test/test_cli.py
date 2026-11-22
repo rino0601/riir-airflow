@@ -69,3 +69,14 @@ def test_cli_mode_dev_serve(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode", "dev", "serve"])
     cli_app()
     assert calls == [("dev", {"port": 8080, "reload": True})]
+
+
+@pytest.mark.parametrize("mode", ["", "Prod", "staging"])
+def test_cli_invalid_serve_mode(monkeypatch, capsys, mode):
+    def unexpected_server(*args, **kwargs):
+        pytest.fail("Uvicorn must not start for an invalid mode")
+
+    monkeypatch.setattr(Serve, "_run_server", unexpected_server)
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode", mode, "serve"])
+    cli_app()
+    assert capsys.readouterr().out == "Invalid parameter. Use 'prod' or 'dev'.\n"

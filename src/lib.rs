@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::PyString;
+use pyo3::types::{PyDict, PyString};
 
 /// Prints a message.
 #[pyfunction]
@@ -18,11 +18,29 @@ fn format_show_mode(mode: &Bound<'_, PyString>) -> PyResult<String> {
     Ok(format!("show \"settings.mode={}\"", mode_repr.to_str()?))
 }
 
+/// Resolve the Uvicorn options for a supported serve mode.
+#[pyfunction]
+fn serve_options<'py>(mode: &Bound<'py, PyString>) -> PyResult<Option<Bound<'py, PyDict>>> {
+    let options = PyDict::new(mode.py());
+    if mode.as_any().eq("prod")? {
+        options.set_item("port", 80)?;
+        options.set_item("log_level", "info")?;
+        options.set_item("workers", 1)?;
+    } else if mode.as_any().eq("dev")? {
+        options.set_item("port", 8080)?;
+        options.set_item("reload", true)?;
+    } else {
+        return Ok(None);
+    }
+    Ok(Some(options))
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello, m)?)?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(format_show_mode, m)?)?;
+    m.add_function(wrap_pyfunction!(serve_options, m)?)?;
     Ok(())
 }

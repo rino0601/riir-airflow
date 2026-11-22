@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from riir_airflow._lowlevel import serve_options
 from riir_airflow.configuration import get_settings
 from sh import Command
 
@@ -14,14 +15,10 @@ class Serve(BaseModel):
             print(line, end="")
 
     def cli_cmd(self) -> None:
-        settings = get_settings()
+        mode = get_settings().mode
+        options = serve_options(mode)
+        if options is None:
+            print("Invalid parameter. Use 'prod' or 'dev'.")
+            return
 
-        match settings.mode:
-            case "prod":
-                self._run_server("prod", port=80, log_level="info", workers=1)
-            case "dev":
-                # uvicorn riir_airflow.asgi:app --port 8080 --reload
-                self._run_server("dev", port=8080, reload=True)
-            case _:
-                print("Invalid parameter. Use 'prod' or 'dev'.")
-                return
+        self._run_server(mode, **options)

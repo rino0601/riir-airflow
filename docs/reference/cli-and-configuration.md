@@ -8,6 +8,8 @@
 | `riir-airflow show` | `riir_airflow.cli.show:Show` | 현재 `RIIR_MODE` 값을 출력합니다. |
 | `riir-airflow serve` | `riir_airflow.cli.serve:Serve` | `dev` 모드에서는 8080 포트, `prod` 모드에서는 80 포트로 ASGI 앱을 실행합니다. |
 
+최상위 `--mode` 옵션이 `show`와 `serve`가 사용하는 모드를 결정하며, 없으면 `RIIR_MODE`(기본값 `dev`)를 사용합니다.
+
 ## Python 설정
 
 `riir_airflow.configuration.Settings`는 `RIIR_` 접두사를 붙인 환경 변수를 읽습니다.

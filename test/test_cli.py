@@ -1,5 +1,6 @@
 import sys
 
+import pytest
 from riir_airflow.__main__ import cli_app
 from riir_airflow.cli.serve import Serve
 from riir_airflow.cli.show import Show
@@ -27,6 +28,13 @@ def test_cli_mode_show(monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode", "prod", "show"])
     cli_app()
     assert capsys.readouterr().out == "show \"settings.mode='prod'\"\n"
+
+
+@pytest.mark.parametrize("mode", ["", "can't", "both'\"", "한글\n\t\\"])
+def test_cli_show_preserves_mode_repr(monkeypatch, capsys, mode):
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode", mode, "show"])
+    cli_app()
+    assert capsys.readouterr().out == f'show "settings.mode={mode!r}"\n'
 
 
 def test_cli_default_mode_show(monkeypatch, capsys):

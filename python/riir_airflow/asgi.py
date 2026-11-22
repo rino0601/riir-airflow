@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
+from a2wsgi import WSGIMiddleware
 from fastapi import FastAPI
-from fastapi.middleware.wsgi import WSGIMiddleware
 
 from riir_airflow._core.fastapi_app import web_app as _fastapi_app
 from riir_airflow.configuration import settings

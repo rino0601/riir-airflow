@@ -51,8 +51,11 @@ tutorial_taskflow_api()
 mise install         # uv와 Rust 툴체인 설치
 mise run setup       # 의존성 동기화, .env 생성, prek 훅 설치
 mise run check       # prek 설정 검사, 포맷/린트, 테스트, 문서 빌드
+mise run test-differential  # 차분 테스트만 실행
 cargo check          # Rust 확장 모듈 확인
 uv run pytest        # Python 테스트
 ```
+
+Airflow 공개 인터페이스를 지키는 세 가지 테스트는 [호환성 테스트 실행하기](how-to/compatibility-testing.md)에서 실행하고, 설계 이유는 [호환성 테스트 설계](explanation/compatibility-testing.md)에서 확인할 수 있습니다.
 
 문서는 [Diátaxis 4분류 개요](explanation/diataxis.md)에 따라 튜토리얼, 실전 가이드, 레퍼런스, 설명으로 나뉩니다. 과거 작업 기록은 [블로그](blog/index.md)에 있습니다.

@@ -5,7 +5,7 @@ from pydantic_settings import (
 
 from riir_airflow.cli.serve import Serve
 from riir_airflow.cli.show import Show
-from riir_airflow.configuration import Settings
+from riir_airflow.configuration import Settings, active_settings
 
 
 class CLI(Settings, cli_parse_args=True):
@@ -15,11 +15,16 @@ class CLI(Settings, cli_parse_args=True):
     show: CliSubCommand[Show]
 
     def cli_cmd(self) -> None:
-        CliApp.run_subcommand(self)
+        token = active_settings.set(self)
+        try:
+            CliApp.run_subcommand(self)
+        finally:
+            active_settings.reset(token)
 
 
-settings = CLI()
-cli_app = settings.cli_cmd
+def cli_app() -> None:
+    CLI().cli_cmd()
+
 
 if __name__ == "__main__":
     cli_app()

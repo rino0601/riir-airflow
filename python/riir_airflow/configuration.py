@@ -1,3 +1,5 @@
+from contextvars import ContextVar
+
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
@@ -21,3 +23,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+active_settings: ContextVar[Settings | None] = ContextVar(
+    "active_settings", default=None
+)
+
+
+def get_settings() -> Settings:
+    return active_settings.get() or settings

@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from riir_airflow.configuration import get_settings
 from sh import Command
 
 
@@ -13,7 +14,7 @@ class Serve(BaseModel):
             print(line, end="")
 
     def cli_cmd(self) -> None:
-        from riir_airflow.configuration import settings
+        settings = get_settings()
 
         match settings.mode:
             case "prod":

@@ -43,3 +43,30 @@ def test_fastapi_app_is_mounted_directly(monkeypatch, initialized_airflow_home):
 
     mount = next(route for route in fastapi_app.routes if isinstance(route, Mount))
     assert mount.app is airflow_app
+
+
+@pytest.mark.parametrize(
+    ("mode", "expected_path"),
+    [("dev", None), ("prod", "/airflow"), ("", "/airflow"), ("DEV", "/airflow")],
+)
+def test_web_app_mount_mode(monkeypatch, mode, expected_path):
+    calls = []
+    web_app = FastAPI()
+    mounted_app = FastAPI()
+
+    def mount(path, app):
+        calls.append((path, app))
+        return mounted_app
+
+    monkeypatch.setattr(asgi.settings, "mode", mode)
+    monkeypatch.setattr(asgi, "_fastapi_app", web_app)
+    monkeypatch.setattr(asgi, "_init_af", mount)
+
+    result = asgi._init_web_app()
+
+    if expected_path is None:
+        assert result is web_app
+        assert calls == []
+    else:
+        assert result is mounted_app
+        assert calls == [(expected_path, web_app)]

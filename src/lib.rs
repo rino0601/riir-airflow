@@ -35,6 +35,12 @@ fn serve_options<'py>(mode: &Bound<'py, PyString>) -> PyResult<Option<Bound<'py,
     Ok(Some(options))
 }
 
+/// Resolve the Airflow mount path for the ASGI application.
+#[pyfunction]
+fn airflow_mount_path(mode: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>> {
+    Ok(mode.ne("dev")?.then_some("/airflow"))
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -42,5 +48,6 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(format_show_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_options, m)?)?;
+    m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
     Ok(())
 }

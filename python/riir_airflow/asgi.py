@@ -5,6 +5,7 @@ from a2wsgi import WSGIMiddleware
 from fastapi import FastAPI
 
 from riir_airflow._core.fastapi_app import web_app as _fastapi_app
+from riir_airflow._lowlevel import airflow_mount_path
 from riir_airflow.configuration import settings
 
 
@@ -40,8 +41,9 @@ def _init_af(mount_path: str, fastapi_app: FastAPI) -> FastAPI:
 
 
 def _init_web_app() -> FastAPI:
-    if settings.mode != "dev":
-        return _init_af("/airflow", _fastapi_app)
+    mount_path = airflow_mount_path(settings.mode)
+    if mount_path is not None:
+        return _init_af(mount_path, _fastapi_app)
     return _fastapi_app
 
 

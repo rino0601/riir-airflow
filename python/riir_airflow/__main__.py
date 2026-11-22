@@ -9,7 +9,7 @@ from riir_airflow.configuration import Settings
 
 
 class CLI(Settings, cli_parse_args=True):
-    """asdf232323233asdf"""
+    """riir-airflow CLI: serve/show 하위 명령을 제공한다."""
 
     serve: CliSubCommand[Serve]
     show: CliSubCommand[Show]

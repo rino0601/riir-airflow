@@ -8,9 +8,9 @@ web_app = FastAPI(default_response_class=ORJSONResponse)
 
 
 # 아래처럼 함으로서 api 덮어 쓸 수 있음은 확인함.
-# @web_app.get("/health")
-# async def h():
-#     return {"status": "healthy"}
+@web_app.get("/health")
+async def h():
+    return {"status": "healthy"}
 
 
 @web_app.get("/show")

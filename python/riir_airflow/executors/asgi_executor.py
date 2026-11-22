@@ -1,5 +1,4 @@
 import asyncio
-import subprocess
 from asyncio.subprocess import Process
 from typing import TYPE_CHECKING, Any
 
@@ -43,7 +42,6 @@ class AsgiExecutor(BaseExecutor):
         queue: str | None = None,
         executor_config: Any | None = None,
     ) -> None:
-        self.validate_airflow_tasks_run_command(command)
         # self.commands_to_run.append((key, command))
         # 일단 asyncio.create_task 와 --raw 대책 없이
         # --local, --raw 의 일단... 대책
@@ -57,17 +55,20 @@ class AsgiExecutor(BaseExecutor):
         for key, coro in self.commands_to_run:
             await asyncio.sleep(0)
             self.log.info("Executing command(coro): %s", coro)
-            self.log.info("1@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
             try:
                 proc: Process = await coro
-                await proc.wait()
-                self.log.info("2@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-                self.log.info(f"{proc.returncode=}")
-                if proc.returncode == 0:
-                    self.success(key)
-            except subprocess.CalledProcessError as e:
+                returncode = await proc.wait()
+            except Exception as e:
                 self.fail(key)
-                self.log.error("Failed to execute task %s.", e)
+                self.log.error("Failed to execute task %s: %s", key, e)
+                continue
+
+            self.log.info("Task %s exited with return code %s", key, returncode)
+            if returncode == 0:
+                self.success(key)
+            else:
+                self.fail(key)
+                self.log.error("Task %s failed with return code %s", key, returncode)
 
         self.commands_to_run = []
 

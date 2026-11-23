@@ -7,4 +7,5 @@ uv run prek validate-config prek.toml
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest -q
+mise run test-differential
 uv run zensical build

@@ -9,14 +9,17 @@ use axum::{Router, routing::MethodFilter};
 use percent_encoding::percent_decode_str;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
+use serde_json::Value;
 use tokio::net::TcpListener;
 
 use crate::{HEALTH_BODY, ServeMode};
 
 /// Recognize the native CLI fast path and leave other forms to Settings.
 #[pyfunction]
+#[pyo3(signature = (args, env_serve=None))]
 pub(crate) fn native_serve_args(
     args: Vec<Bound<'_, PyString>>,
+    env_serve: Option<&Bound<'_, PyString>>,
 ) -> Option<(Option<String>, Option<u16>)> {
     let args = args
         .iter()
@@ -27,9 +30,13 @@ pub(crate) fn native_serve_args(
         ["--mode", mode @ ("dev" | "prod"), rest @ ..] => (Some(*mode), rest),
         args => (None, args),
     };
-    let port = match args {
-        ["serve", "--native"] => None,
-        ["serve", "--native", "--port", value] | ["serve", "--port", value, "--native"]
+    let port = match (args, env_serve.is_some()) {
+        (["serve", "--native"], false) | (["serve"], true) => None,
+        (
+            ["serve", "--native", "--port", value] | ["serve", "--port", value, "--native"],
+            false,
+        )
+        | (["serve", "--port", value], true)
             if (1..=5).contains(&value.len())
                 && value.bytes().all(|byte| byte.is_ascii_digit()) =>
         {
@@ -37,7 +44,28 @@ pub(crate) fn native_serve_args(
         }
         _ => return None,
     };
-    Some((mode.map(str::to_owned), port))
+    let env_port = match env_serve {
+        Some(value) => native_env_port(value.to_str().ok()?)?,
+        None => None,
+    };
+    Some((mode.map(str::to_owned), port.or(env_port)))
+}
+
+/// Accept only the JSON fields and types whose Settings interpretation we mirror.
+fn native_env_port(value: &str) -> Option<Option<u16>> {
+    let fields = serde_json::from_str::<Value>(value).ok()?;
+    let fields = fields.as_object()?;
+    if fields.get("native") != Some(&Value::Bool(true))
+        || fields
+            .keys()
+            .any(|key| !matches!(key.as_str(), "native" | "port"))
+    {
+        return None;
+    }
+    match fields.get("port") {
+        None | Some(Value::Null) => Some(None),
+        Some(port) => Some(Some(port.as_u64()?.try_into().ok()?)),
+    }
 }
 
 fn json(status: StatusCode, body: impl Into<String>) -> Response {

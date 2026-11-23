@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from riir_airflow.asgi import app
+from starlette.testclient import TestClient
 
 # `uv run pytest`로 바로 실행해도 mise run configure와 같은 Airflow 설정을 사용한다.
 _project_root = Path(__file__).resolve().parents[1]

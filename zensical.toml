@@ -18,6 +18,7 @@ nav = [
         { "CLI와 설정" = "reference/cli-and-configuration.md" },
     ]},
     { "설명" = [
+        { "현재 아키텍처" = "explanation/architecture.md" },
         { "Diátaxis 4분류 개요" = "explanation/diataxis.md" },
         { "git 훅과 --hook-command" = "explanation/hook-command.md" },
         { "호환성 테스트 설계" = "explanation/compatibility-testing.md" },

@@ -1,18 +1,16 @@
+from dataclasses import dataclass
 from os import environ
 from sys import executable
 
-from pydantic import BaseModel, Field
-from pydantic_settings import CliImplicitFlag
 from riir_airflow._lowlevel import serve_options
 from riir_airflow.cli._native import INVALID_MODE, run_native
 from riir_airflow.configuration import get_settings
 
 
-class Serve(BaseModel):
-    native: CliImplicitFlag[bool] = Field(
-        default=False, description="Serve /health and /show directly with Axum."
-    )
-    port: int | None = Field(default=None, ge=0, le=65535)
+@dataclass
+class Serve:
+    native: bool = False
+    port: int | None = None
 
     def _run_server(self, mode: str, **kwargs):
         try:
@@ -27,7 +25,10 @@ class Serve(BaseModel):
             "-m", "uvicorn", "riir_airflow.asgi:app", **kwargs
         )
         print(f"Starting Uvicorn server in {mode} mode...")
-        for line in uvicorn_cmd(_iter=True, _env={**environ, "RIIR_MODE": mode}):
+        env = {
+            key: value for key, value in environ.items() if key.lower() != "riir_mode"
+        }
+        for line in uvicorn_cmd(_iter=True, _env={**env, "RIIR_MODE": mode}):
             print(line, end="")
 
     def cli_cmd(self) -> None:

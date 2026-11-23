@@ -97,7 +97,7 @@ class RejectSettingsImports:
 
 sys.meta_path.insert(0, RejectSettingsImports())
 
-parse = _lowlevel.native_serve_args
+parse = _lowlevel.parse_cli
 
 
 def record_native_dispatch(*args):
@@ -106,7 +106,7 @@ def record_native_dispatch(*args):
     return result
 
 
-_lowlevel.native_serve_args = record_native_dispatch
+_lowlevel.parse_cli = record_native_dispatch
 """
     )
     port = free_port()
@@ -122,7 +122,9 @@ _lowlevel.native_serve_args = record_native_dispatch
         args = []
     with server(tmp_path, port, *args, env=env):
         assert request(port, "GET", "/health")[0] == 200
-        assert (tmp_path / "native-dispatch.txt").read_text() == f"('dev', {port})"
+        assert (
+            tmp_path / "native-dispatch.txt"
+        ).read_text() == f"(('dev', 'serve', True, {port}), None)"
 
 
 def test_installed_servers_match_on_shared_http_routes(tmp_path):

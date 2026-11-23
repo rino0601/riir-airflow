@@ -1,25 +1,19 @@
 from contextvars import ContextVar
+from dataclasses import dataclass, field
 
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-)
+from riir_airflow._lowlevel import settings_mode
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_prefix="RIIR_",
-    )
+@dataclass
+class Settings:
+    mode: str = field(default_factory=settings_mode)
 
-    # Basic settings
-    mode: str = "dev"
+    def __post_init__(self) -> None:
+        if not isinstance(self.mode, str):
+            raise TypeError("mode must be a string")
 
-    # # CLI Subcommands
-    # serve: CliSubCommand[Serve]
-    # show: CliSubCommand[Show]
-
-    # def cli_cmd(self) -> None:
-    #     CliApp.run_subcommand(self)
+    def model_dump(self) -> dict[str, str]:
+        return {"mode": self.mode}
 
 
 settings = Settings()

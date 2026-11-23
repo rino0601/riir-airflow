@@ -2200,9 +2200,6 @@ wheels = [
 name = "riir-airflow"
 version = "0.1.0"
 source = { editable = "." }
-dependencies = [
-    { name = "pydantic-settings" },
-]
 
 [package.optional-dependencies]
 compat = [
@@ -2226,7 +2223,6 @@ dev = [
 requires-dist = [
     { name = "a2wsgi", marker = "extra == 'compat'", specifier = ">=1.10.10" },
     { name = "apache-airflow", marker = "extra == 'compat'", specifier = ">=3.4" },
-    { name = "pydantic-settings", specifier = ">=2.16.3" },
     { name = "sh", marker = "extra == 'compat'", specifier = ">=2.4.0" },
     { name = "starlette", marker = "extra == 'compat'", specifier = ">=1.10.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'compat'", specifier = ">=0.54.0" },

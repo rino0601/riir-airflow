@@ -1,13 +1,11 @@
 import sys
 
 import pytest
-from pydantic import ValidationError
 from riir_airflow.__main__ import cli_app
-from riir_airflow._lowlevel import native_serve_args
 from riir_airflow.cli import _native, serve
 from riir_airflow.cli.serve import Serve
 from riir_airflow.cli.show import Show
-from riir_airflow.configuration import Settings
+from riir_airflow.configuration import Settings, get_settings
 
 
 def test_settings_default_mode(monkeypatch):
@@ -18,6 +16,11 @@ def test_settings_default_mode(monkeypatch):
 def test_settings_prod_mode(monkeypatch):
     monkeypatch.setenv("RIIR_MODE", "prod")
     assert Settings().mode == "prod"
+
+
+def test_settings_explicit_mode_wins(monkeypatch):
+    monkeypatch.setenv("RIIR_MODE", "prod")
+    assert Settings(mode="dev").model_dump() == {"mode": "dev"}
 
 
 def test_show_cli_cmd(capsys):
@@ -33,7 +36,7 @@ def test_cli_mode_show(monkeypatch, capsys):
     assert capsys.readouterr().out == "show \"settings.mode='prod'\"\n"
 
 
-@pytest.mark.parametrize("mode", ["", "can't", "both'\"", "한글\n\t\\"])
+@pytest.mark.parametrize("mode", ["", "-1", "-.5", "can't", "both'\"", "한글\n\t\\"])
 def test_cli_show_preserves_mode_repr(monkeypatch, capsys, mode):
     monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode", mode, "show"])
     cli_app()
@@ -118,49 +121,25 @@ def test_native_cli_preserves_subcommand_environment(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("args", "expected"),
-    [
-        (["serve", "--native"], (None, None)),
-        (["serve", "--native", "--port", "00000"], (None, 0)),
-        (["--mode", "prod", "serve", "--port", "65535", "--native"], ("prod", 65535)),
-        (["serve"], None),
-        (["serve", "--native", "--help"], None),
-        (["--mode", "staging", "serve", "--native"], None),
-        *[
-            (["serve", "--native", "--port", port], None)
-            for port in ["", "+80", "65536", "000080", "８０", "\udcff"]
-        ],
-    ],
-)
-def test_native_serve_argument_fast_path(args, expected):
-    assert native_serve_args(args) == expected
-
-
-@pytest.mark.parametrize(
     ("args", "env_serve", "expected"),
     [
-        (["serve"], '{"native":true}', (None, None)),
-        (["serve"], '{"native":true,"port":null}', (None, None)),
-        (["serve"], '{"native":true,"port":12345}', (None, 12345)),
-        (["serve", "--port", "0"], '{"native":true,"port":12345}', (None, 0)),
-        (["serve", "--no-native"], '{"native":true}', None),
-        (["serve", "--help"], '{"native":true}', None),
-        *[
-            (["serve"], value, None)
-            for value in [
-                '{"native":false}',
-                '{"native":"true"}',
-                '{"native":true,"port":65536}',
-                '{"native":true,"port":1.0}',
-                '{"native":true,"PORT":80}',
-                '{"native":true,"extra":0}',
-                '{"native":true',
-            ]
-        ],
+        ([], '{"NATIVE":"YES","port":"1_000.0"}', ("dev", 1000)),
+        ([], '{"native":true,"port":1000,"PORT":0}', ("dev", 0)),
+        (["--port=null"], '{"native":true,"port":1000}', ("dev", None)),
+        (["--port=+80", "--native"], '{"native":null,"port":-1}', ("dev", 80)),
+        (["--no-native", "--native"], "invalid JSON", ("dev", None)),
     ],
 )
-def test_environment_selected_native_serve_arguments(args, env_serve, expected):
-    assert native_serve_args(args, env_serve) == expected
+def test_native_cli_resolves_serve_options(monkeypatch, args, env_serve, expected):
+    monkeypatch.setenv("RIIR_MODE", "dev")
+    monkeypatch.setenv("RIIR_SERVE", env_serve)
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "serve", *args])
+    calls = []
+    monkeypatch.setattr(
+        _native, "serve_native", lambda mode, port: calls.append((mode, port)) or True
+    )
+    cli_app()
+    assert calls == [expected]
 
 
 def test_environment_native_selection_preserves_cli_negation(monkeypatch):
@@ -187,15 +166,82 @@ def test_environment_selected_native_serve_uses_environment_mode_and_port(monkey
     assert calls == [("prod", 12345)]
 
 
-def test_environment_native_selection_preserves_port_validation(monkeypatch):
-    monkeypatch.setenv("RIIR_SERVE", '{"native": true, "port": 65536}')
-    monkeypatch.setattr(sys, "argv", ["riir-airflow", "serve"])
-    with pytest.raises(ValidationError) as exc:
+@pytest.mark.parametrize(
+    ("args", "settings", "code", "message"),
+    [
+        ([], None, 1, "CLI subcommand is required"),
+        (["bogus"], None, 2, "unrecognized subcommand"),
+        (["show", "--mode", "dev"], None, 2, "--mode"),
+        (["serve", "--port"], None, 2, "--port"),
+        (["serve", "--native=true"], None, 2, "--native"),
+        (["--mode=null", "show"], None, 1, "mode: Input should be a valid string"),
+        (["serve", "--port", "-1"], None, 1, "greater than or equal to 0"),
+        (["serve", "--port", "-.5"], None, 1, "valid integer"),
+        (
+            ["serve", "--port=bad"],
+            None,
+            1,
+            "serve.port: Input should be a valid integer",
+        ),
+        (
+            ["serve"],
+            '{"native": true, "port": 65536}',
+            1,
+            "less than or equal to 65535",
+        ),
+        (
+            ["serve"],
+            '{"native":null}',
+            1,
+            "serve.native: Input should be a valid boolean",
+        ),
+    ],
+)
+def test_cli_errors(monkeypatch, capsys, args, settings, code, message):
+    if settings is not None:
+        monkeypatch.setenv("RIIR_SERVE", settings)
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", *args])
+    with pytest.raises(SystemExit) as exc:
         cli_app()
-    error = exc.value.errors()[0]
-    assert error["loc"] == ("serve", "port")
-    assert error["type"] == "less_than_equal"
-    assert error["ctx"] == {"le": 65535}
+    assert exc.value.code == code
+    output = capsys.readouterr()
+    assert not output.out
+    assert message in output.err
+
+
+@pytest.mark.parametrize(
+    ("args", "features"),
+    [
+        (["-h"], ["--mode", "serve", "show"]),
+        (["serve", "--help"], ["--native", "--no-native", "--port"]),
+        (["show", "--help"], ["show", "--help"]),
+    ],
+)
+def test_cli_help(monkeypatch, capsys, args, features):
+    monkeypatch.setenv("RIIR_SERVE", '{"port": 65536}')
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", *args])
+    with pytest.raises(SystemExit) as exc:
+        cli_app()
+    assert exc.value.code == 0
+    output = capsys.readouterr()
+    assert not output.err
+    assert all(feature in output.out for feature in features)
+
+
+def test_cli_restores_settings_context_on_error(monkeypatch):
+    initial_settings = get_settings()
+
+    def fail(self, mode, **options):
+        assert mode == "prod"
+        assert get_settings().mode == "prod"
+        raise RuntimeError("server failed")
+
+    monkeypatch.setenv("RIIR_MODE", "dev")
+    monkeypatch.setattr(Serve, "_run_server", fail)
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode=prod", "serve"])
+    with pytest.raises(RuntimeError, match="server failed"):
+        cli_app()
+    assert get_settings() is initial_settings
 
 
 @pytest.mark.parametrize("mode", ["", "Prod", "staging"])

@@ -1,5 +1,5 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyString};
+use pyo3::types::{PyBytes, PyDict, PyString};
 
 /// Prints a message.
 #[pyfunction]
@@ -41,6 +41,16 @@ fn airflow_mount_path(mode: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>>
     Ok(mode.ne("dev")?.then_some("/airflow"))
 }
 
+/// Build the HTTP response for a successful health check.
+#[pyfunction]
+fn health_response(py: Python<'_>) -> (Bound<'_, PyBytes>, u16, &'static str) {
+    (
+        PyBytes::new(py, br#"{"status":"healthy"}"#),
+        200,
+        "application/json",
+    )
+}
+
 /// Build the response for the ASGI request-state endpoint.
 #[pyfunction]
 fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
@@ -59,6 +69,7 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(format_show_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_options, m)?)?;
     m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
+    m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(show_state, m)?)?;
     Ok(())
 }

@@ -79,10 +79,13 @@ def server(directory, port, *args, env=None):
                 process.wait(timeout=5)
 
 
-def test_installed_native_server_skips_settings_imports(tmp_path):
+def test_installed_native_server_dispatches_through_rust(tmp_path):
     (tmp_path / "sitecustomize.py").write_text(
         """
 import sys
+from pathlib import Path
+
+from riir_airflow import _lowlevel
 
 
 class RejectSettingsImports:
@@ -92,6 +95,17 @@ class RejectSettingsImports:
 
 
 sys.meta_path.insert(0, RejectSettingsImports())
+
+parse = _lowlevel.native_serve_args
+
+
+def record_native_dispatch(args):
+    result = parse(args)
+    Path("native-dispatch.txt").write_text(repr(result))
+    return result
+
+
+_lowlevel.native_serve_args = record_native_dispatch
 """
     )
     port = free_port()
@@ -99,6 +113,7 @@ sys.meta_path.insert(0, RejectSettingsImports())
         tmp_path, port, "--native", env={**os.environ, "PYTHONPATH": str(tmp_path)}
     ):
         assert request(port, "GET", "/health")[0] == 200
+        assert (tmp_path / "native-dispatch.txt").read_text() == f"('dev', {port})"
 
 
 def test_installed_servers_match_on_shared_http_routes(tmp_path):

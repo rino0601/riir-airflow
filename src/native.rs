@@ -13,6 +13,33 @@ use tokio::net::TcpListener;
 
 use crate::{HEALTH_BODY, ServeMode};
 
+/// Recognize the native CLI fast path and leave other forms to Settings.
+#[pyfunction]
+pub(crate) fn native_serve_args(
+    args: Vec<Bound<'_, PyString>>,
+) -> Option<(Option<String>, Option<u16>)> {
+    let args = args
+        .iter()
+        .map(PyStringMethods::to_str)
+        .collect::<PyResult<Vec<_>>>()
+        .ok()?;
+    let (mode, args) = match args.as_slice() {
+        ["--mode", mode @ ("dev" | "prod"), rest @ ..] => (Some(*mode), rest),
+        args => (None, args),
+    };
+    let port = match args {
+        ["serve", "--native"] => None,
+        ["serve", "--native", "--port", value] | ["serve", "--port", value, "--native"]
+            if (1..=5).contains(&value.len())
+                && value.bytes().all(|byte| byte.is_ascii_digit()) =>
+        {
+            Some(value.parse().ok()?)
+        }
+        _ => return None,
+    };
+    Some((mode.map(str::to_owned), port))
+}
+
 fn json(status: StatusCode, body: impl Into<String>) -> Response {
     (
         status,

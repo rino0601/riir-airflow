@@ -2,6 +2,7 @@ import sys
 
 import pytest
 from riir_airflow.__main__ import cli_app
+from riir_airflow._lowlevel import native_serve_args
 from riir_airflow.cli import _native, serve
 from riir_airflow.cli.serve import Serve
 from riir_airflow.cli.show import Show
@@ -113,6 +114,25 @@ def test_native_cli_preserves_subcommand_environment(monkeypatch):
     )
     cli_app()
     assert calls == [("prod", 12345)]
+
+
+@pytest.mark.parametrize(
+    ("args", "expected"),
+    [
+        (["serve", "--native"], (None, None)),
+        (["serve", "--native", "--port", "00000"], (None, 0)),
+        (["--mode", "prod", "serve", "--port", "65535", "--native"], ("prod", 65535)),
+        (["serve"], None),
+        (["serve", "--native", "--help"], None),
+        (["--mode", "staging", "serve", "--native"], None),
+        *[
+            (["serve", "--native", "--port", port], None)
+            for port in ["", "+80", "65536", "000080", "８０", "\udcff"]
+        ],
+    ],
+)
+def test_native_serve_argument_fast_path(args, expected):
+    assert native_serve_args(args) == expected
 
 
 @pytest.mark.parametrize("mode", ["", "Prod", "staging"])

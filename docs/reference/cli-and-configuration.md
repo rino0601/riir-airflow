@@ -16,6 +16,17 @@ Airflow UI, 인증, 플러그인, API 문서 및 자동 리로드가 없으므�
 사용하려면 기본 ASGI 방식으로 실행합니다. ASGI는 `dev`에서 자동 리로드를
 사용하며, `prod`에서 초기화된 Airflow를 `/airflow`에 마운트합니다.
 
+## Cargo로 빌드한 CLI
+
+`mise exec -- cargo build --locked --no-default-features`로 빌드한 뒤
+`target/debug/riir-airflow serve --native --port 0`으로 Axum을 직접 실행할 수
+있습니다. `RIIR_SERVE='{"native":true,"port":0}' target/debug/riir-airflow serve`도
+같은 서버를 실행합니다. 명령줄의 `--mode`와 `--port`가 환경 변수보다 우선합니다.
+
+그 밖의 호출은 PATH에 있는 `python3`(Windows에서는 `python`)으로 `riir_airflow` 모듈을 실행합니다.
+이 경로를 사용하려면 패키지를 설치한 Python 환경을 활성화합니다. Python 패키지가
+설치하는 `riir-airflow` 명령은 기존 Python 엔트리 포인트를 사용합니다.
+
 ## Python 설정
 
 `riir_airflow.configuration.Settings`는 `RIIR_` 접두사를 붙인 환경 변수를 읽습니다.

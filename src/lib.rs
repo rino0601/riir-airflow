@@ -20,19 +20,44 @@ fn format_show_mode(mode: &Bound<'_, PyString>) -> PyResult<String> {
     Ok(format!("show \"settings.mode={}\"", mode_repr.to_str()?))
 }
 
+enum ServeMode {
+    Prod,
+    Dev,
+}
+
+impl ServeMode {
+    fn parse(mode: &Bound<'_, PyString>) -> PyResult<Option<Self>> {
+        if mode.as_any().eq("prod")? {
+            Ok(Some(Self::Prod))
+        } else if mode.as_any().eq("dev")? {
+            Ok(Some(Self::Dev))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn default_port(&self) -> u16 {
+        match self {
+            Self::Prod => 80,
+            Self::Dev => 8080,
+        }
+    }
+}
+
 /// Resolve the Uvicorn options for a supported serve mode.
 #[pyfunction]
 fn serve_options<'py>(mode: &Bound<'py, PyString>) -> PyResult<Option<Bound<'py, PyDict>>> {
-    let options = PyDict::new(mode.py());
-    if mode.as_any().eq("prod")? {
-        options.set_item("port", 80)?;
-        options.set_item("log_level", "info")?;
-        options.set_item("workers", 1)?;
-    } else if mode.as_any().eq("dev")? {
-        options.set_item("port", 8080)?;
-        options.set_item("reload", true)?;
-    } else {
+    let Some(serve_mode) = ServeMode::parse(mode)? else {
         return Ok(None);
+    };
+    let options = PyDict::new(mode.py());
+    options.set_item("port", serve_mode.default_port())?;
+    match serve_mode {
+        ServeMode::Prod => {
+            options.set_item("log_level", "info")?;
+            options.set_item("workers", 1)?;
+        }
+        ServeMode::Dev => options.set_item("reload", true)?,
     }
     Ok(Some(options))
 }

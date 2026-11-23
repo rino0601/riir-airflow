@@ -2,6 +2,7 @@ import sys
 
 import pytest
 from riir_airflow.__main__ import cli_app
+from riir_airflow.cli import serve
 from riir_airflow.cli.serve import Serve
 from riir_airflow.cli.show import Show
 from riir_airflow.configuration import Settings
@@ -71,12 +72,46 @@ def test_cli_mode_dev_serve(monkeypatch):
     assert calls == [("dev", {"port": 8080, "reload": True})]
 
 
+@pytest.mark.parametrize(
+    ("env_mode", "mode_args", "port_args", "expected"),
+    [
+        (None, [], [], ("dev", None)),
+        ("prod", [], [], ("prod", None)),
+        ("prod", ["--mode", "dev"], ["--port", "0"], ("dev", 0)),
+    ],
+)
+def test_native_cli_skips_uvicorn_options(
+    monkeypatch, env_mode, mode_args, port_args, expected
+):
+    if env_mode is None:
+        monkeypatch.delenv("RIIR_MODE", raising=False)
+    else:
+        monkeypatch.setenv("RIIR_MODE", env_mode)
+
+    def unexpected_options(*args):
+        pytest.fail("Native serve must skip Uvicorn options")
+
+    calls = []
+    monkeypatch.setattr(serve, "serve_options", unexpected_options)
+    monkeypatch.setattr(
+        serve, "serve_native", lambda mode, port: calls.append((mode, port)) or True
+    )
+    monkeypatch.setattr(
+        sys, "argv", ["riir-airflow", *mode_args, "serve", "--native", *port_args]
+    )
+    cli_app()
+    assert calls == [expected]
+
+
 @pytest.mark.parametrize("mode", ["", "Prod", "staging"])
-def test_cli_invalid_serve_mode(monkeypatch, capsys, mode):
+@pytest.mark.parametrize("native_args", [[], ["--native"]])
+def test_cli_invalid_serve_mode(monkeypatch, capsys, mode, native_args):
     def unexpected_server(*args, **kwargs):
         pytest.fail("Uvicorn must not start for an invalid mode")
 
     monkeypatch.setattr(Serve, "_run_server", unexpected_server)
-    monkeypatch.setattr(sys, "argv", ["riir-airflow", "--mode", mode, "serve"])
+    monkeypatch.setattr(
+        sys, "argv", ["riir-airflow", "--mode", mode, "serve", *native_args]
+    )
     cli_app()
     assert capsys.readouterr().out == "Invalid parameter. Use 'prod' or 'dev'.\n"

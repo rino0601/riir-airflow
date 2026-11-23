@@ -2,53 +2,36 @@ import asyncio
 from asyncio.subprocess import Process
 from typing import TYPE_CHECKING, Any
 
-from airflow.executors.base_executor import BaseExecutor
+from airflow.executors.local_executor import LocalExecutor
+from airflow.executors.workloads import WorkloadType
 
 if TYPE_CHECKING:
-    from airflow.executors.base_executor import CommandType
     from airflow.models.taskinstancekey import TaskInstanceKey
 
 
-class AsgiExecutor(BaseExecutor):
-    """
-    This executor will only run one task instance at a time.
-
-    It can be used for debugging. It is also the only executor
-    that can be used with sqlite since sqlite doesn't support
-    multiple connections.
-
-    Since we want airflow to work out of the box, it defaults to this
-    AsgiExecutor alongside sqlite as you first install it.
-    """
+class AsgiExecutor(LocalExecutor):
+    """Run Airflow task workloads through a single local worker."""
 
     supports_pickling: bool = False
-
-    is_local: bool = True
+    supports_multi_team: bool = False
     is_single_threaded: bool = True
     is_production: bool = False
-
-    serve_logs: bool = True
+    supported_workload_types = frozenset({WorkloadType.EXECUTE_TASK})
 
     def __init__(self):
-        super().__init__()
+        super().__init__(parallelism=1)
         self.commands_to_run = []
-        # self.pool = ProcessPoolExecutor()
-        # self.loop = asyncio.get_running_loop()
 
     def execute_async(
         self,
         key: "TaskInstanceKey",
-        command: "CommandType",
+        command: list[str],
         queue: str | None = None,
         executor_config: Any | None = None,
     ) -> None:
-        # self.commands_to_run.append((key, command))
-        # 일단 asyncio.create_task 와 --raw 대책 없이
-        # --local, --raw 의 일단... 대책
-        # command = list(map(lambda x: x.replace("--local", "--raw"), command))
+        """Queue a command for callers of the legacy command interface."""
         self.log.info("Booking command(): %s", command)
         coro = asyncio.create_subprocess_exec(command[0], *command[1:])
-        # coro = asyncio.create_task(coro)
         self.commands_to_run.append((key, coro))
 
     async def synca(self) -> None:
@@ -75,10 +58,3 @@ class AsgiExecutor(BaseExecutor):
     async def aheartbeat(self) -> None:
         self.heartbeat()
         await self.synca()
-
-    def end(self):
-        """End the executor."""
-        self.heartbeat()
-
-    def terminate(self):
-        """Terminate the executor is not doing anything."""

@@ -1,11 +1,18 @@
 import asyncio
 
+from airflow.executors.workloads import WorkloadType
 from airflow.models.taskinstancekey import TaskInstanceKey
 from airflow.utils.state import TaskInstanceState
 from riir_airflow.executors import asgi_executor
 from riir_airflow.executors.asgi_executor import AsgiExecutor
 
 KEY = TaskInstanceKey("dag", "task", "run", 1)
+
+
+def test_executor_accepts_only_task_workloads_with_one_slot():
+    executor = AsgiExecutor()
+    assert executor.parallelism == 1
+    assert executor.supported_workload_types == {WorkloadType.EXECUTE_TASK}
 
 
 class FakeProcess:

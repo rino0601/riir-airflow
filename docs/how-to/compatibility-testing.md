@@ -20,6 +20,8 @@ mise run test-differential
 
 이 명령은 `uv run pytest -q -m differential`과 같습니다. `dags/simple.py`를 apache-airflow와 riir-airflow 양쪽에서 읽어 taskflow 결과, 의존 그래프, DAG 직렬화 결과를 비교합니다.
 
+같은 명령에서 Airflow 3.4.0의 `LocalExecutor`와 `AsgiExecutor`를 각각 새 SQLite 데이터베이스에서 실행합니다. 첫 시도의 재시도 대기 상태, 두 번째 시도의 성공 상태, 총 두 번의 실제 실행을 비교합니다. PR CI에서도 이 명령을 실행합니다.
+
 ## 개별 실행 예시
 
 ```sh

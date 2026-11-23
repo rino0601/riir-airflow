@@ -2212,6 +2212,7 @@ compat = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "apache-airflow" },
     { name = "prek" },
     { name = "pytest" },
     { name = "riir-airflow", extra = ["compat"] },
@@ -2231,6 +2232,7 @@ provides-extras = ["compat"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "apache-airflow", specifier = "==3.4.0" },
     { name = "prek", specifier = ">=0.5.11" },
     { name = "pytest", specifier = ">=9.2.0" },
     { name = "riir-airflow", extras = ["compat"] },

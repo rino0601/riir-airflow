@@ -25,11 +25,16 @@ def test_show_propagates_repr_errors(client):
         client.get("/show")
 
 
-def test_health(client):
-    response = client.get("/health")
+@pytest.mark.parametrize("root_path", ["", "/proxy"])
+def test_health(root_path):
+    client = TestClient(app, root_path=root_path)
+    response = client.get(root_path + "/health")
     assert response.status_code == 200
-    assert response.headers["content-type"].startswith("application/json")
-    assert response.json() == {"status": "healthy"}
+    assert dict(response.headers) == {
+        "content-length": "20",
+        "content-type": "application/json",
+    }
+    assert response.content == b'{"status":"healthy"}'
 
 
 @pytest.mark.parametrize("path", ["/health", "/show"])

@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from riir_airflow._lowlevel import show_state
+from riir_airflow._lowlevel import health_response, show_state
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -15,8 +15,9 @@ _REDOC = (_DOCS / "redoc.html").read_text(encoding="utf-8")
 _OAUTH_REDIRECT = (_DOCS / "oauth2-redirect.html").read_text(encoding="utf-8")
 
 
-async def h(request: Request) -> JSONResponse:
-    return JSONResponse({"status": "healthy"})
+async def h(request: Request) -> Response:
+    body, status_code, media_type = health_response()
+    return Response(body, status_code=status_code, media_type=media_type)
 
 
 async def show(request: Request) -> JSONResponse:

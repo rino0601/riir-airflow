@@ -4,8 +4,8 @@ import sys
 
 import pytest
 from a2wsgi import WSGIMiddleware
-from fastapi import FastAPI
 from riir_airflow import asgi
+from starlette.applications import Starlette
 from starlette.routing import Mount
 
 
@@ -24,24 +24,26 @@ def test_wsgi_app_is_mounted_with_a2wsgi(monkeypatch, initialized_airflow_home):
     wsgi_app = object()
     monkeypatch.setattr("airflow.api_fastapi.app.cached_app", lambda: wsgi_app)
 
-    fastapi_app = FastAPI()
-    mounted_app = asgi._init_af("/airflow", fastapi_app)
+    app = Starlette()
+    mounted_app = asgi._init_af("/airflow", app)
 
-    assert mounted_app is fastapi_app
-    mount = next(route for route in fastapi_app.routes if isinstance(route, Mount))
+    assert mounted_app is app
+    mount = next(route for route in app.routes if isinstance(route, Mount))
     assert mount.path == "/airflow"
     assert isinstance(mount.app, WSGIMiddleware)
     assert mount.app.app is wsgi_app
 
 
-def test_fastapi_app_is_mounted_directly(monkeypatch, initialized_airflow_home):
+def test_airflow_asgi_app_is_mounted_directly(monkeypatch, initialized_airflow_home):
+    from fastapi import FastAPI
+
     airflow_app = FastAPI()
     monkeypatch.setattr("airflow.api_fastapi.app.cached_app", lambda: airflow_app)
 
-    fastapi_app = FastAPI()
-    asgi._init_af("/airflow", fastapi_app)
+    app = Starlette()
+    asgi._init_af("/airflow", app)
 
-    mount = next(route for route in fastapi_app.routes if isinstance(route, Mount))
+    mount = next(route for route in app.routes if isinstance(route, Mount))
     assert mount.app is airflow_app
 
 
@@ -51,15 +53,15 @@ def test_fastapi_app_is_mounted_directly(monkeypatch, initialized_airflow_home):
 )
 def test_web_app_mount_mode(monkeypatch, mode, expected_path):
     calls = []
-    web_app = FastAPI()
-    mounted_app = FastAPI()
+    web_app = Starlette()
+    mounted_app = Starlette()
 
     def mount(path, app):
         calls.append((path, app))
         return mounted_app
 
     monkeypatch.setattr(asgi.settings, "mode", mode)
-    monkeypatch.setattr(asgi, "_fastapi_app", web_app)
+    monkeypatch.setattr(asgi, "web_app", web_app)
     monkeypatch.setattr(asgi, "_init_af", mount)
 
     result = asgi._init_web_app()

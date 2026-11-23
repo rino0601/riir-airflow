@@ -1,0 +1,5 @@
+The documentation pages and schema preserve the output of FastAPI 0.165.0.
+The OAuth2 redirect page comes from Swagger UI v4.14.0 via FastAPI.
+
+swagger-ui
+Copyright 2020-2021 SmartBear Software Inc.

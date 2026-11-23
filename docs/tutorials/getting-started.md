@@ -24,7 +24,7 @@ uv가 `uv.lock`을 기준으로 의존성을 동기화하고, `.env`에 Airflow 
 uv run pytest
 ```
 
-`test/test_fastapi.py`의 테스트가 통과하면 준비가 끝났습니다. Airflow 앱 위주로 남은 ASGI 앱이 정상적으로 만들어진 것입니다.
+`test/test_web_app.py`의 테스트가 통과하면 준비가 끝났습니다. Airflow 앱 위주로 남은 ASGI 앱이 정상적으로 만들어진 것입니다.
 
 ## 4. 전체 검사
 

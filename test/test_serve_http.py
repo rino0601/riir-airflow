@@ -79,7 +79,8 @@ def server(directory, port, *args, env=None):
                 process.wait(timeout=5)
 
 
-def test_installed_native_server_dispatches_through_rust(tmp_path):
+@pytest.mark.parametrize("use_environment", [False, True])
+def test_installed_native_server_dispatches_through_rust(tmp_path, use_environment):
     (tmp_path / "sitecustomize.py").write_text(
         """
 import sys
@@ -99,8 +100,8 @@ sys.meta_path.insert(0, RejectSettingsImports())
 parse = _lowlevel.native_serve_args
 
 
-def record_native_dispatch(args):
-    result = parse(args)
+def record_native_dispatch(*args):
+    result = parse(*args)
     Path("native-dispatch.txt").write_text(repr(result))
     return result
 
@@ -109,9 +110,17 @@ _lowlevel.native_serve_args = record_native_dispatch
 """
     )
     port = free_port()
-    with server(
-        tmp_path, port, "--native", env={**os.environ, "PYTHONPATH": str(tmp_path)}
-    ):
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if key.lower() not in {"riir_mode", "riir_serve", "riir_show"}
+    }
+    env["PYTHONPATH"] = str(tmp_path)
+    args = ["--native"]
+    if use_environment:
+        env.update(riir_serve='{"native": true, "port": 0}', RIIR_MODE="prod")
+        args = []
+    with server(tmp_path, port, *args, env=env):
         assert request(port, "GET", "/health")[0] == 200
         assert (tmp_path / "native-dispatch.txt").read_text() == f"('dev', {port})"
 

@@ -1,6 +1,7 @@
 import sys
 
 import pytest
+from pydantic import ValidationError
 from riir_airflow.__main__ import cli_app
 from riir_airflow._lowlevel import native_serve_args
 from riir_airflow.cli import _native, serve
@@ -133,6 +134,68 @@ def test_native_cli_preserves_subcommand_environment(monkeypatch):
 )
 def test_native_serve_argument_fast_path(args, expected):
     assert native_serve_args(args) == expected
+
+
+@pytest.mark.parametrize(
+    ("args", "env_serve", "expected"),
+    [
+        (["serve"], '{"native":true}', (None, None)),
+        (["serve"], '{"native":true,"port":null}', (None, None)),
+        (["serve"], '{"native":true,"port":12345}', (None, 12345)),
+        (["serve", "--port", "0"], '{"native":true,"port":12345}', (None, 0)),
+        (["serve", "--no-native"], '{"native":true}', None),
+        (["serve", "--help"], '{"native":true}', None),
+        *[
+            (["serve"], value, None)
+            for value in [
+                '{"native":false}',
+                '{"native":"true"}',
+                '{"native":true,"port":65536}',
+                '{"native":true,"port":1.0}',
+                '{"native":true,"PORT":80}',
+                '{"native":true,"extra":0}',
+                '{"native":true',
+            ]
+        ],
+    ],
+)
+def test_environment_selected_native_serve_arguments(args, env_serve, expected):
+    assert native_serve_args(args, env_serve) == expected
+
+
+def test_environment_native_selection_preserves_cli_negation(monkeypatch):
+    monkeypatch.setenv("RIIR_MODE", "dev")
+    monkeypatch.setenv("RIIR_SERVE", '{"native": true, "port": 12345}')
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "serve", "--no-native"])
+    calls = []
+    monkeypatch.setattr(
+        Serve, "_run_server", lambda self, mode, **kwargs: calls.append((mode, kwargs))
+    )
+    cli_app()
+    assert calls == [("dev", {"port": 12345, "reload": True})]
+
+
+def test_environment_selected_native_serve_uses_environment_mode_and_port(monkeypatch):
+    monkeypatch.setenv("RIIR_MODE", "prod")
+    monkeypatch.setenv("RIIR_SERVE", '{"native": true, "port": 12345}')
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "serve"])
+    calls = []
+    monkeypatch.setattr(
+        _native, "serve_native", lambda mode, port: calls.append((mode, port)) or True
+    )
+    cli_app()
+    assert calls == [("prod", 12345)]
+
+
+def test_environment_native_selection_preserves_port_validation(monkeypatch):
+    monkeypatch.setenv("RIIR_SERVE", '{"native": true, "port": 65536}')
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "serve"])
+    with pytest.raises(ValidationError) as exc:
+        cli_app()
+    error = exc.value.errors()[0]
+    assert error["loc"] == ("serve", "port")
+    assert error["type"] == "less_than_equal"
+    assert error["ctx"] == {"le": 65535}
 
 
 @pytest.mark.parametrize("mode", ["", "Prod", "staging"])

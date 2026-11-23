@@ -17,14 +17,14 @@ def run_native(mode: str, port: int | None) -> None:
 
 
 def try_native_serve(args: list[str]) -> bool:
-    parsed = native_serve_args(args)
+    env = {key.lower(): value for key, value in environ.items()}
+    # Leave other subcommand environment values to Settings.
+    if "riir_show" in env:
+        return False
+    parsed = native_serve_args(args, env.get("riir_serve"))
     if parsed is None:
         return False
     mode, port = parsed
 
-    env = {key.lower(): value for key, value in environ.items()}
-    # The settings model can merge JSON subcommand values from the environment.
-    if "riir_serve" in env or "riir_show" in env:
-        return False
     run_native(mode if mode is not None else env.get("riir_mode", "dev"), port)
     return True

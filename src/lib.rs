@@ -1,8 +1,7 @@
+pub mod cli;
 mod native;
-mod native_cli;
 
 pub use native::serve;
-pub use native_cli::native_serve_port;
 
 #[cfg(feature = "python")]
 mod python;

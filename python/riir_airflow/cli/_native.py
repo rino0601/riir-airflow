@@ -1,6 +1,4 @@
-from os import environ
-
-from riir_airflow._lowlevel import native_serve_args, serve_native
+from riir_airflow._lowlevel import serve_native
 
 INVALID_MODE = "Invalid parameter. Use 'prod' or 'dev'."
 
@@ -14,17 +12,3 @@ def run_native(mode: str, port: int | None) -> None:
         return
     except OSError as exc:
         raise SystemExit(str(exc)) from None
-
-
-def try_native_serve(args: list[str]) -> bool:
-    env = {key.lower(): value for key, value in environ.items()}
-    # Leave other subcommand environment values to Settings.
-    if "riir_show" in env:
-        return False
-    parsed = native_serve_args(args, env.get("riir_serve"))
-    if parsed is None:
-        return False
-    mode, port = parsed
-
-    run_native(mode if mode is not None else env.get("riir_mode", "dev"), port)
-    return True

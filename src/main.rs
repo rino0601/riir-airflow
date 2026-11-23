@@ -1,50 +1,42 @@
 use std::env;
-use std::ffi::OsString;
 use std::io;
 use std::process::{Command, ExitCode};
 
-use riir_airflow::{native_serve_port, serve};
+use riir_airflow::cli::{Config, INVALID_MODE, ServeMode, Subcommand};
+use riir_airflow::{cli, serve};
 
-fn native_port(args: &[OsString]) -> Option<u16> {
-    let args = args
-        .iter()
-        .map(|arg| arg.to_str())
-        .collect::<Option<Vec<_>>>()?;
-    let mut mode = None;
-    let mut settings = None;
-    for (key, value) in env::vars_os() {
-        let Some(key) = key.to_str() else { continue };
-        match key.to_ascii_lowercase().as_str() {
-            "riir_show" => return None,
-            "riir_mode" => mode = Some(value),
-            "riir_serve" => settings = Some(value),
-            _ => {}
+fn run(config: Config) -> io::Result<ExitCode> {
+    let (command, port) = match config.command {
+        Subcommand::Show => ("show", None),
+        Subcommand::Serve { native, port } => {
+            let Some(mode) = ServeMode::parse(&config.mode) else {
+                println!("{INVALID_MODE}");
+                return Ok(ExitCode::SUCCESS);
+            };
+            if native {
+                serve(port.unwrap_or_else(|| mode.default_port()))?;
+                return Ok(ExitCode::SUCCESS);
+            }
+            ("serve", port)
         }
-    }
-    let mode = mode
-        .as_ref()
-        .map(|value| value.to_str())
-        .unwrap_or(Some("dev"))?;
-    let settings = match settings.as_ref() {
-        Some(value) => Some(value.to_str()?),
-        None => None,
     };
-    native_serve_port(&args, Some(mode), settings)
-}
-
-fn run(args: &[OsString]) -> io::Result<ExitCode> {
-    if let Some(port) = native_port(args) {
-        serve(port)?;
-        return Ok(ExitCode::SUCCESS);
-    }
 
     let executable = if cfg!(windows) { "python" } else { "python3" };
     let mut python = Command::new(executable);
-    python.args(["-m", "riir_airflow"]).args(args);
+    python
+        .args([
+            "-c",
+            "from riir_airflow.__main__ import _run_from_cargo; _run_from_cargo()",
+        ])
+        .arg(config.mode)
+        .arg(command);
+    if let Some(port) = port {
+        python.arg(port.to_string());
+    }
     let launch_error = |error: io::Error| {
         io::Error::new(
             error.kind(),
-            format!("Could not launch {executable} -m riir_airflow: {error}"),
+            format!("Could not launch the riir-airflow Python stage with {executable}: {error}"),
         )
     };
     #[cfg(unix)]
@@ -64,8 +56,18 @@ fn run(args: &[OsString]) -> io::Result<ExitCode> {
 }
 
 fn main() -> ExitCode {
-    let args = env::args_os().skip(1).collect::<Vec<_>>();
-    match run(&args) {
+    let config = match cli::parse(env::args_os().skip(1).collect(), "riir-airflow") {
+        Ok(config) => config,
+        Err(exit) => {
+            if exit.code == 0 {
+                print!("{}", exit.message);
+            } else {
+                eprint!("{}", exit.message);
+            }
+            return ExitCode::from(exit.code);
+        }
+    };
+    match run(config) {
         Ok(code) => code,
         Err(error) => {
             eprintln!("{error}");

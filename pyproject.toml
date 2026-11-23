@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "riir-airflow"
 version = "0.1.0"
 description = "Add your description here"
-dependencies = ["pydantic-settings>=2.16.3"]
+dependencies = []
 readme = "README.md"
 requires-python = ">=3.13"
 

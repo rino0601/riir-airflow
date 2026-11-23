@@ -1,5 +1,6 @@
 #![cfg(unix)]
 
+use std::env;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
@@ -26,6 +27,21 @@ fn wait_for<T>(mut poll: impl FnMut() -> Option<T>) -> T {
     }
 }
 
+fn isolated_cli() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_riir-airflow"));
+    // Keep the dynamic loader environment for builds linked to libpython.
+    for (key, _) in env::vars_os() {
+        if ["RIIR_MODE", "RIIR_SERVE", "RIIR_SHOW"]
+            .iter()
+            .any(|name| key.eq_ignore_ascii_case(name))
+        {
+            command.env_remove(key);
+        }
+    }
+    command.env("PATH", "").stdin(Stdio::null());
+    command
+}
+
 fn check_native_server(
     args: &[&str],
     env_mode: &str,
@@ -33,13 +49,8 @@ fn check_native_server(
     expected_port: u16,
     signal: &str,
 ) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_riir-airflow"));
-    command
-        .env_clear()
-        .env("PATH", "")
-        .env("riir_mode", env_mode)
-        .args(args)
-        .stdin(Stdio::null());
+    let mut command = isolated_cli();
+    command.env("riir_mode", env_mode).args(args);
     if let Some(settings) = settings {
         command.env("riir_serve", settings);
     }
@@ -113,4 +124,23 @@ fn environment_port_is_used_without_cli_override() {
         port,
         "-TERM",
     );
+}
+
+#[test]
+fn help_and_errors_are_handled_without_python() {
+    let help = isolated_cli().args(["serve", "--help"]).output().unwrap();
+    assert!(help.status.success());
+    assert!(help.stderr.is_empty());
+    let stdout = String::from_utf8(help.stdout).unwrap();
+    for option in ["--native", "--no-native", "--port"] {
+        assert!(stdout.contains(option));
+    }
+
+    let invalid = isolated_cli()
+        .args(["serve", "--port=65536"])
+        .output()
+        .unwrap();
+    assert_eq!(invalid.status.code(), Some(1));
+    assert!(invalid.stdout.is_empty());
+    assert!(String::from_utf8(invalid.stderr).unwrap().contains("65535"));
 }

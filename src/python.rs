@@ -1,4 +1,6 @@
-use crate::native_cli::{ServeMode, parse_native_serve_args};
+use std::ffi::OsString;
+
+use crate::cli::{self, ServeMode, Subcommand};
 use crate::{HEALTH_BODY, serve};
 
 use pyo3::prelude::*;
@@ -82,21 +84,27 @@ fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
     Ok(response)
 }
 
-/// Recognize the native CLI fast path and leave other forms to Settings.
+type ParsedCli = (OsString, &'static str, bool, Option<u16>);
+type CliDiagnostic = (u8, String);
+
+/// Parse the wheel entry point with the same parser as the Cargo binary.
 #[pyfunction]
-#[pyo3(signature = (args, env_serve=None))]
-fn native_serve_args(
-    args: Vec<Bound<'_, PyString>>,
-    env_serve: Option<&Bound<'_, PyString>>,
-) -> Option<(Option<String>, Option<u16>)> {
-    let args = args
-        .iter()
-        .map(PyStringMethods::to_str)
-        .collect::<PyResult<Vec<_>>>()
-        .ok()?;
-    let env_serve = env_serve.map(PyStringMethods::to_str).transpose().ok()?;
-    let (mode, port) = parse_native_serve_args(&args, env_serve)?;
-    Some((mode.map(str::to_owned), port))
+fn parse_cli(args: Vec<OsString>, program: &str) -> (Option<ParsedCli>, Option<CliDiagnostic>) {
+    match cli::parse(args, program) {
+        Ok(config) => {
+            let (command, native, port) = match config.command {
+                Subcommand::Show => ("show", false, None),
+                Subcommand::Serve { native, port } => ("serve", native, port),
+            };
+            (Some((config.mode, command, native, port)), None)
+        }
+        Err(exit) => (None, Some((exit.code, exit.message))),
+    }
+}
+
+#[pyfunction]
+fn settings_mode() -> OsString {
+    cli::settings_mode()
 }
 
 #[pyfunction]
@@ -120,7 +128,8 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(show_state, m)?)?;
-    m.add_function(wrap_pyfunction!(native_serve_args, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_cli, m)?)?;
+    m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;
     Ok(())
 }

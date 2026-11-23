@@ -7,7 +7,7 @@
 | `riir-airflow` | `riir_airflow.__main__:cli_app` | 최상위 CLI. `serve`, `show` 하위 명령을 제공합니다. |
 | `riir-airflow show` | `riir_airflow.cli.show:Show` | 현재 `RIIR_MODE` 값을 출력합니다. |
 | `riir-airflow serve` | `riir_airflow.cli.serve:Serve` | `dev` 모드에서는 8080 포트, `prod` 모드에서는 80 포트로 ASGI 앱을 실행합니다. `riir-airflow[compat]` 설치가 필요합니다. |
-| `riir-airflow serve --native` | `riir_airflow.cli.serve:Serve` | Axum HTTP 서버가 `127.0.0.1`에서 `/health`, `/show`를 제공합니다. 기본 패키지만 설치하면 됩니다. |
+| `riir-airflow serve --native` | Rust Axum 서버 | `127.0.0.1`에서 `/health`, `/show`를 제공합니다. 기본 패키지만 설치하면 됩니다. |
 
 최상위 `--mode` 옵션이 `show`와 `serve`가 사용하는 모드를 결정하며, 없으면 `RIIR_MODE`(기본값 `dev`)를 사용합니다.
 
@@ -21,19 +21,32 @@ Airflow UI, 인증, 플러그인, API 문서 및 자동 리로드가 없으므�
 `mise exec -- cargo build --locked --no-default-features`로 빌드한 뒤
 `target/debug/riir-airflow serve --native --port 0`으로 Axum을 직접 실행할 수
 있습니다. `RIIR_SERVE='{"native":true,"port":0}' target/debug/riir-airflow serve`도
-같은 서버를 실행합니다. 명령줄의 `--mode`와 `--port`가 환경 변수보다 우선합니다.
+같은 서버를 실행합니다. 도움말과 인자 검증은 Cargo 명령, wheel의 `riir-airflow` 명령,
+`python -m riir_airflow`가 같은 Rust 파서를 사용합니다.
 
-그 밖의 호출은 PATH에 있는 `python3`(Windows에서는 `python`)으로 `riir_airflow` 모듈을 실행합니다.
-이 경로를 사용하려면 패키지를 설치한 Python 환경을 활성화합니다. Python 패키지가
-설치하는 `riir-airflow` 명령은 기존 Python 엔트리 포인트를 사용합니다.
+Cargo 명령의 `show`와 ASGI `serve`는 해석이 끝난 설정을 PATH에 있는
+`python3`(Windows에서는 `python`)에 넘깁니다. 이 명령을 사용하려면
+패키지를 설치한 Python 환경을 활성화합니다.
 
-## Python 설정
+## 설정
 
-`riir_airflow.configuration.Settings`는 `RIIR_` 접두사를 붙인 환경 변수를 읽습니다.
+명령줄 옵션, 환경 변수, 기본값 순으로 설정을 적용합니다. 환경 변수 이름과
+`RIIR_SERVE`의 JSON 필드 이름은 대소문자를 구분하지 않습니다.
 
 | 환경 변수 | 기본값 | 타입 | 설명 |
 | --- | --- | --- | --- |
 | `RIIR_MODE` | `dev` | 문자열 | 실행 모드. `dev` 또는 `prod`를 사용합니다. |
+| `RIIR_SERVE` | `{}` | JSON 객체 | `serve`의 `native`와 `port`를 지정합니다. 예를 들어 `{"native":true,"port":8081}`을 사용할 수 있습니다. |
+
+`serve --no-native`는 환경 변수의 네이티브 서버 선택을 덮어씁니다.
+`--port null` 또는 JSON의 `"port":null`은 모드의 기본 포트를 선택합니다.
+
+Python에서는 `riir_airflow.configuration.Settings()`로 환경 변수에서 모드를
+읽고 `Settings(mode="prod")`로 직접 지정할 수 있습니다. CLI가 Python 명령을
+실행하는 동안 `get_settings()`는 해석을 마친 모드를 반환합니다.
+
+기본 wheel에는 Python 런타임 의존성이 없습니다. `compat`를 설치하면
+Airflow가 사용하는 FastAPI를 통해 `pydantic-settings`가 전이 의존성으로 설치될 수 있습니다.
 
 ## Airflow 환경 변수
 

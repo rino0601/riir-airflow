@@ -107,6 +107,7 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(show_state, m)?)?;
+    m.add_function(wrap_pyfunction!(native::native_serve_args, m)?)?;
     m.add_function(wrap_pyfunction!(native::serve_native, m)?)?;
     Ok(())
 }

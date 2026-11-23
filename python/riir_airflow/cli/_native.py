@@ -1,6 +1,6 @@
 from os import environ
 
-from riir_airflow._lowlevel import serve_native
+from riir_airflow._lowlevel import native_serve_args, serve_native
 
 INVALID_MODE = "Invalid parameter. Use 'prod' or 'dev'."
 
@@ -17,28 +17,10 @@ def run_native(mode: str, port: int | None) -> None:
 
 
 def try_native_serve(args: list[str]) -> bool:
-    # Keep help, validation errors, and other argument forms with the CLI model.
-    mode = None
-    if args[:1] == ["--mode"] and len(args) >= 2 and args[1] in {"dev", "prod"}:
-        mode = args[1]
-        args = args[2:]
-
-    match args:
-        case ["serve", "--native"]:
-            port = None
-        case ["serve", "--native", "--port", value] | [
-            "serve",
-            "--port",
-            value,
-            "--native",
-        ]:
-            if not (value.isascii() and value.isdecimal() and len(value) <= 5):
-                return False
-            port = int(value)
-            if port > 65535:
-                return False
-        case _:
-            return False
+    parsed = native_serve_args(args)
+    if parsed is None:
+        return False
+    mode, port = parsed
 
     env = {key.lower(): value for key, value in environ.items()}
     # The settings model can merge JSON subcommand values from the environment.

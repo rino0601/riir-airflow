@@ -2201,34 +2201,43 @@ name = "riir-airflow"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "pydantic-settings" },
+]
+
+[package.optional-dependencies]
+compat = [
     { name = "a2wsgi" },
     { name = "apache-airflow" },
-    { name = "pydantic-settings" },
     { name = "sh" },
     { name = "starlette" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
 dev = [
     { name = "prek" },
     { name = "pytest" },
+    { name = "riir-airflow", extra = ["compat"] },
     { name = "ruff" },
     { name = "zensical" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "a2wsgi", specifier = ">=1.10.10" },
-    { name = "apache-airflow", specifier = ">=3.4" },
+    { name = "a2wsgi", marker = "extra == 'compat'", specifier = ">=1.10.10" },
+    { name = "apache-airflow", marker = "extra == 'compat'", specifier = ">=3.4" },
     { name = "pydantic-settings", specifier = ">=2.16.3" },
-    { name = "sh", specifier = ">=2.4.0" },
-    { name = "starlette", specifier = ">=1.10.0" },
+    { name = "sh", marker = "extra == 'compat'", specifier = ">=2.4.0" },
+    { name = "starlette", marker = "extra == 'compat'", specifier = ">=1.10.0" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'compat'", specifier = ">=0.54.0" },
 ]
+provides-extras = ["compat"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "prek", specifier = ">=0.5.11" },
     { name = "pytest", specifier = ">=9.2.0" },
+    { name = "riir-airflow", extras = ["compat"] },
     { name = "ruff", specifier = ">=0.17.6" },
     { name = "zensical", specifier = ">=0.1.3,<0.2" },
 ]

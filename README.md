@@ -17,3 +17,14 @@ Rewrite airflow in rust. it might be help to simplify to operate airflow.
 - simplify architecture
 - simplify python dependency
 - simplify DAG deploy
+
+## Serve
+
+Install `riir-airflow` and run `riir-airflow serve --native` for the Axum
+listener. It serves `/health` and `/show` on loopback without an Airflow or
+FastAPI dependency.
+
+Install `riir-airflow[compat]` and run `riir-airflow serve` for the default
+Uvicorn/ASGI server with the existing Airflow integrations. Dev mode reloads
+the ASGI app, and prod mode mounts Airflow at `/airflow` in an initialized
+Airflow environment. Both servers accept `serve --port PORT`.

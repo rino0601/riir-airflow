@@ -31,21 +31,21 @@ class Serve(BaseModel):
 
     def cli_cmd(self) -> None:
         mode = get_settings().mode
-        options = serve_options(mode)
-        if options is None:
-            print("Invalid parameter. Use 'prod' or 'dev'.")
-            return
-
-        if self.port is not None:
-            options["port"] = self.port
         if self.native:
             try:
-                serve_native(options["port"])
+                if serve_native(mode, self.port):
+                    return
             except KeyboardInterrupt:
                 # Python can deliver SIGINT after Axum has drained the listener.
                 return
             except OSError as exc:
                 raise SystemExit(str(exc)) from None
-            return
+        else:
+            options = serve_options(mode)
+            if options is not None:
+                if self.port is not None:
+                    options["port"] = self.port
+                self._run_server(mode, **options)
+                return
 
-        self._run_server(mode, **options)
+        print("Invalid parameter. Use 'prod' or 'dev'.")

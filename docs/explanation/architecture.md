@@ -19,8 +19,9 @@ riir-airflow serve --native → PyO3 → Axum → /health, /show
 `--mode`, `RIIR_MODE`, 기본값 `dev` 순으로 모드를 결정하고 하위 명령을 호출합니다.
 
 - `show`는 선택한 모드를 Rust 함수 `format_show_mode`에 넘기고 반환된 문자열을 표준 출력에 씁니다.
-- `serve`는 Rust 함수 `serve_options`에서 설정을 받아 기본 ASGI 서버 또는
-  `--native`로 지정한 Axum 서버를 시작합니다. 기본 ASGI 서버는
+- `serve --native`는 모드와 포트 옵션을 Rust 함수 `serve_native`에 넘깁니다.
+  이 함수는 모드를 확인하고 포트를 결정한 뒤 Axum 서버를 시작합니다.
+  기본 ASGI 서버는 Rust 함수 `serve_options`에서 Uvicorn 설정을 받습니다.
   `riir-airflow[compat]`가 필요하며, 같은 Python 인터프리터에서
   `python -m uvicorn riir_airflow.asgi:app`을 별도 프로세스로 실행합니다.
   지원하지 않는 모드에는 안내 메시지를 출력하고 서버를 시작하지 않습니다.

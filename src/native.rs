@@ -8,9 +8,10 @@ use axum::routing::on;
 use axum::{Router, routing::MethodFilter};
 use percent_encoding::percent_decode_str;
 use pyo3::prelude::*;
+use pyo3::types::PyString;
 use tokio::net::TcpListener;
 
-use crate::HEALTH_BODY;
+use crate::{HEALTH_BODY, ServeMode};
 
 fn json(status: StatusCode, body: impl Into<String>) -> Response {
     (
@@ -136,12 +137,21 @@ async fn run(port: u16) -> io::Result<()> {
 }
 
 #[pyfunction]
-pub(crate) fn serve_native(py: Python<'_>, port: u16) -> PyResult<()> {
+#[pyo3(signature = (mode, port=None))]
+pub(crate) fn serve_native(
+    py: Python<'_>,
+    mode: &Bound<'_, PyString>,
+    port: Option<u16>,
+) -> PyResult<bool> {
+    let Some(mode) = ServeMode::parse(mode)? else {
+        return Ok(false);
+    };
+    let port = port.unwrap_or_else(|| mode.default_port());
     py.detach(|| {
         tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
             .block_on(run(port))
     })?;
-    Ok(())
+    Ok(true)
 }

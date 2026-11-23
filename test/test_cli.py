@@ -2,7 +2,7 @@ import sys
 
 import pytest
 from riir_airflow.__main__ import cli_app
-from riir_airflow.cli import serve
+from riir_airflow.cli import _native, serve
 from riir_airflow.cli.serve import Serve
 from riir_airflow.cli.show import Show
 from riir_airflow.configuration import Settings
@@ -94,13 +94,25 @@ def test_native_cli_skips_uvicorn_options(
     calls = []
     monkeypatch.setattr(serve, "serve_options", unexpected_options)
     monkeypatch.setattr(
-        serve, "serve_native", lambda mode, port: calls.append((mode, port)) or True
+        _native, "serve_native", lambda mode, port: calls.append((mode, port)) or True
     )
     monkeypatch.setattr(
         sys, "argv", ["riir-airflow", *mode_args, "serve", "--native", *port_args]
     )
     cli_app()
     assert calls == [expected]
+
+
+def test_native_cli_preserves_subcommand_environment(monkeypatch):
+    monkeypatch.setenv("riir_mode", "prod")
+    monkeypatch.setenv("riir_serve", '{"port": 12345}')
+    monkeypatch.setattr(sys, "argv", ["riir-airflow", "serve", "--native"])
+    calls = []
+    monkeypatch.setattr(
+        _native, "serve_native", lambda mode, port: calls.append((mode, port)) or True
+    )
+    cli_app()
+    assert calls == [("prod", 12345)]
 
 
 @pytest.mark.parametrize("mode", ["", "Prod", "staging"])

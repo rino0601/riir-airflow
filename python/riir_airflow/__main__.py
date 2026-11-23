@@ -1,28 +1,14 @@
-from pydantic_settings import (
-    CliApp,
-    CliSubCommand,
-)
+import sys
 
-from riir_airflow.cli.serve import Serve
-from riir_airflow.cli.show import Show
-from riir_airflow.configuration import Settings, active_settings
-
-
-class CLI(Settings, cli_parse_args=True):
-    """riir-airflow CLI: serve/show 하위 명령을 제공한다."""
-
-    serve: CliSubCommand[Serve]
-    show: CliSubCommand[Show]
-
-    def cli_cmd(self) -> None:
-        token = active_settings.set(self)
-        try:
-            CliApp.run_subcommand(self)
-        finally:
-            active_settings.reset(token)
+from riir_airflow.cli._native import try_native_serve
 
 
 def cli_app() -> None:
+    if try_native_serve(sys.argv[1:]):
+        return
+
+    from riir_airflow.cli._settings import CLI
+
     CLI().cli_cmd()
 
 

@@ -1,7 +1,6 @@
-from pprint import pformat
-
 from fastapi import FastAPI
 from fastapi.requests import Request
+from riir_airflow._lowlevel import show_state
 
 web_app = FastAPI()
 
@@ -14,4 +13,4 @@ async def h():
 
 @web_app.get("/show")
 async def show(req: Request):
-    return dict(out=pformat(req.state._state))
+    return show_state(req.state._state)

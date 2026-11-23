@@ -83,12 +83,15 @@ def test_installed_servers_match_on_shared_http_routes(tmp_path):
         ("GET", "/health", 200),
         ("GET", "/show", 200),
         ("GET", "/%73how?ignored=yes", 200),
+        ("GET", "/show?state=%7B%22z%22%3A%22%ED%95%9C%EA%B8%80%22%7D", 200),
+        ("HEAD", "/show", 405),
         ("HEAD", "/health", 405),
         ("POST", "/show", 405),
         ("OPTIONS", "/health", 405),
         ("GET", "/missing", 404),
         ("HEAD", "/missing", 404),
         ("POST", "/health//?keep=%2F", 307),
+        ("POST", "/show//?state=%7B%7D", 307),
     ]
     native_port = free_port()
     with server(tmp_path, native_port, "--native"):
@@ -99,6 +102,9 @@ def test_installed_servers_match_on_shared_http_routes(tmp_path):
                 asgi = request(asgi_port, method, path)
                 assert native[0] == status, (method, path, native)
                 assert native == asgi, (method, path, native, asgi)
+                if status == 200 and path.startswith(("/show", "/%73how")):
+                    assert native[1]["content-type"] == "application/json"
+                    assert native[2] == b'{"out":"{}"}'
 
 
 @pytest.mark.parametrize("shutdown_signal", [signal.SIGINT, signal.SIGTERM])

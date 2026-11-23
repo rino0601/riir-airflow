@@ -50,7 +50,8 @@ Uvicorn은 요청을 ASGI로 전달하고 Python의 Starlette가 경로와 메�
 | `/openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc` | Python이 패키지에 들어 있는 스키마와 API 문서 HTML을 제공합니다. 스키마와 Swagger UI·ReDoc 페이지는 ASGI의 `root_path`를 반영합니다. |
 
 Axum은 루프백 주소에서 HTTP/1 요청을 받아 `/health`, `/show`와 오류 응답을
-직접 처리합니다. `/show`는 빈 요청 상태에 같은 Python 포맷팅 함수를 사용합니다.
+직접 처리합니다. 네이티브 요청에는 애플리케이션 상태가 없으므로 `/show`는
+Rust에서 빈 딕셔너리의 표현인 `{}`를 `out`에 담습니다.
 Airflow 마운트, API 문서, 자동 리로드는 ASGI 방식에서 제공됩니다.
 
 ## Airflow 초기화와 하위 라우팅

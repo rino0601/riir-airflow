@@ -7,66 +7,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::on;
 use axum::{Router, routing::MethodFilter};
 use percent_encoding::percent_decode_str;
-use pyo3::prelude::*;
-use pyo3::types::PyString;
-use serde_json::Value;
 use tokio::net::TcpListener;
 
-use crate::{HEALTH_BODY, ServeMode};
-
-/// Recognize the native CLI fast path and leave other forms to Settings.
-#[pyfunction]
-#[pyo3(signature = (args, env_serve=None))]
-pub(crate) fn native_serve_args(
-    args: Vec<Bound<'_, PyString>>,
-    env_serve: Option<&Bound<'_, PyString>>,
-) -> Option<(Option<String>, Option<u16>)> {
-    let args = args
-        .iter()
-        .map(PyStringMethods::to_str)
-        .collect::<PyResult<Vec<_>>>()
-        .ok()?;
-    let (mode, args) = match args.as_slice() {
-        ["--mode", mode @ ("dev" | "prod"), rest @ ..] => (Some(*mode), rest),
-        args => (None, args),
-    };
-    let port = match (args, env_serve.is_some()) {
-        (["serve", "--native"], false) | (["serve"], true) => None,
-        (
-            ["serve", "--native", "--port", value] | ["serve", "--port", value, "--native"],
-            false,
-        )
-        | (["serve", "--port", value], true)
-            if (1..=5).contains(&value.len())
-                && value.bytes().all(|byte| byte.is_ascii_digit()) =>
-        {
-            Some(value.parse().ok()?)
-        }
-        _ => return None,
-    };
-    let env_port = match env_serve {
-        Some(value) => native_env_port(value.to_str().ok()?)?,
-        None => None,
-    };
-    Some((mode.map(str::to_owned), port.or(env_port)))
-}
-
-/// Accept only the JSON fields and types whose Settings interpretation we mirror.
-fn native_env_port(value: &str) -> Option<Option<u16>> {
-    let fields = serde_json::from_str::<Value>(value).ok()?;
-    let fields = fields.as_object()?;
-    if fields.get("native") != Some(&Value::Bool(true))
-        || fields
-            .keys()
-            .any(|key| !matches!(key.as_str(), "native" | "port"))
-    {
-        return None;
-    }
-    match fields.get("port") {
-        None | Some(Value::Null) => Some(None),
-        Some(port) => Some(Some(port.as_u64()?.try_into().ok()?)),
-    }
-}
+use crate::HEALTH_BODY;
 
 fn json(status: StatusCode, body: impl Into<String>) -> Response {
     (
@@ -191,22 +134,9 @@ async fn run(port: u16) -> io::Result<()> {
         .await
 }
 
-#[pyfunction]
-#[pyo3(signature = (mode, port=None))]
-pub(crate) fn serve_native(
-    py: Python<'_>,
-    mode: &Bound<'_, PyString>,
-    port: Option<u16>,
-) -> PyResult<bool> {
-    let Some(mode) = ServeMode::parse(mode)? else {
-        return Ok(false);
-    };
-    let port = port.unwrap_or_else(|| mode.default_port());
-    py.detach(|| {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()?
-            .block_on(run(port))
-    })?;
-    Ok(true)
+pub fn serve(port: u16) -> io::Result<()> {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(run(port))
 }

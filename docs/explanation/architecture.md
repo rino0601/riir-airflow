@@ -16,10 +16,9 @@ riir-airflow serve --native → PyO3 → Axum → /health, /show
 
 패키지의 `riir-airflow` 명령과 `python -m riir_airflow`는 모두
 `riir_airflow.__main__:cli_app`으로 들어갑니다. 이 엔트리 포인트는
-PyO3를 통해 Cargo 명령과 같은 Rust 파서를 호출합니다. Rust의 clap 파서가
+PyO3를 통해 Rust의 clap 파서를 호출합니다. 이 파서가
 명령과 도움말을 처리하고, Rust에서 읽은 `RIIR_MODE`와 `RIIR_SERVE` 위에
-명령줄 옵션을 적용합니다. Cargo 명령은 Axum을 직접 실행하며,
-`show`와 ASGI `serve`의 해석된 설정을 Python에 넘깁니다.
+명령줄 옵션을 적용합니다.
 
 - `show`는 선택한 모드를 Rust 함수 `format_show_mode`에 넘기고 반환된 문자열을 표준 출력에 씁니다.
 - `serve --native`는 모드와 포트 옵션을 Rust 함수 `serve_native`에 넘깁니다.

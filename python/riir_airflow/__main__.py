@@ -27,11 +27,6 @@ def _run(mode: str, command: str, native: bool, port: int | None) -> None:
         active_settings.reset(token)
 
 
-def _run_from_cargo() -> None:
-    mode, command, *port = sys.argv[1:]
-    _run(mode, command, False, int(port[0]) if port else None)
-
-
 def cli_app() -> None:
     config, exit_status = parse_cli(sys.argv[1:], Path(sys.argv[0]).name)
     if exit_status is not None:

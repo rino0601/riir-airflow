@@ -6,22 +6,12 @@ use clap::error::ErrorKind;
 use clap::{Arg, ArgAction, Command};
 use serde_json::Value;
 
-pub const INVALID_MODE: &str = "Invalid parameter. Use 'prod' or 'dev'.";
-
 pub enum ServeMode {
     Prod,
     Dev,
 }
 
 impl ServeMode {
-    pub fn parse(mode: &OsStr) -> Option<Self> {
-        match mode.to_str()? {
-            "prod" => Some(Self::Prod),
-            "dev" => Some(Self::Dev),
-            _ => None,
-        }
-    }
-
     pub fn default_port(&self) -> u16 {
         match self {
             Self::Prod => 80,

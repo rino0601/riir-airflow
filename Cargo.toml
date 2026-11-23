@@ -7,14 +7,10 @@ rust-version = "1.85"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "riir_airflow"
-crate-type = ["cdylib", "rlib"]
-
-[features]
-default = ["python"]
-python = ["dep:pyo3"]
+crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.30.1", optional = true }
+pyo3 = "0.30.1"
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
 percent-encoding = "2"
 serde_json = { version = "1", features = ["arbitrary_precision", "preserve_order"] }

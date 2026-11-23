@@ -1,7 +1,8 @@
 use std::ffi::OsString;
 
 use crate::cli::{self, ServeMode, Subcommand};
-use crate::{HEALTH_BODY, serve};
+use crate::HEALTH_BODY;
+use crate::native::serve;
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyString};
@@ -87,7 +88,7 @@ fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
 type ParsedCli = (OsString, &'static str, bool, Option<u16>);
 type CliDiagnostic = (u8, String);
 
-/// Parse the wheel entry point with the same parser as the Cargo binary.
+/// Parse arguments for the installed CLI.
 #[pyfunction]
 fn parse_cli(args: Vec<OsString>, program: &str) -> (Option<ParsedCli>, Option<CliDiagnostic>) {
     match cli::parse(args, program) {

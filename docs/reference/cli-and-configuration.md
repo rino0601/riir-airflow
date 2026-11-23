@@ -6,9 +6,15 @@
 | --- | --- | --- |
 | `riir-airflow` | `riir_airflow.__main__:cli_app` | 최상위 CLI. `serve`, `show` 하위 명령을 제공합니다. |
 | `riir-airflow show` | `riir_airflow.cli.show:Show` | 현재 `RIIR_MODE` 값을 출력합니다. |
-| `riir-airflow serve` | `riir_airflow.cli.serve:Serve` | `dev` 모드에서는 8080 포트, `prod` 모드에서는 80 포트로 ASGI 앱을 실행합니다. |
+| `riir-airflow serve` | `riir_airflow.cli.serve:Serve` | `dev` 모드에서는 8080 포트, `prod` 모드에서는 80 포트로 ASGI 앱을 실행합니다. `riir-airflow[compat]` 설치가 필요합니다. |
+| `riir-airflow serve --native` | `riir_airflow.cli.serve:Serve` | Axum HTTP 서버가 `127.0.0.1`에서 `/health`, `/show`를 제공합니다. 기본 패키지만 설치하면 됩니다. |
 
 최상위 `--mode` 옵션이 `show`와 `serve`가 사용하는 모드를 결정하며, 없으면 `RIIR_MODE`(기본값 `dev`)를 사용합니다.
+
+두 방식 모두 `serve --port PORT`로 포트를 바꿀 수 있습니다. Axum 서버에는
+Airflow UI, 인증, 플러그인, API 문서 및 자동 리로드가 없으므로 이런 기능을
+사용하려면 기본 ASGI 방식으로 실행합니다. ASGI는 `dev`에서 자동 리로드를
+사용하며, `prod`에서 초기화된 Airflow를 `/airflow`에 마운트합니다.
 
 ## Python 설정
 

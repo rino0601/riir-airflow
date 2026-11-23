@@ -6,15 +6,18 @@ build-backend = "maturin"
 name = "riir-airflow"
 version = "0.1.0"
 description = "Add your description here"
-dependencies = [
+dependencies = ["pydantic-settings>=2.16.3"]
+readme = "README.md"
+requires-python = ">=3.13"
+
+[project.optional-dependencies]
+compat = [
     "a2wsgi>=1.10.10",
-    "pydantic-settings>=2.16.3",
     "apache-airflow>=3.4",
     "sh>=2.4.0",
     "starlette>=1.10.0",
+    "uvicorn[standard]>=0.54.0",
 ]
-readme = "README.md"
-requires-python = ">=3.13"
 
 [project.scripts]
 riir-airflow = 'riir_airflow.__main__:cli_app'
@@ -26,6 +29,7 @@ features = ["pyo3/extension-module"]
 
 [dependency-groups]
 dev = [
+    "riir-airflow[compat]",
     "pytest>=9.2.0",
     "ruff>=0.17.6",
     "zensical>=0.1.3,<0.2",

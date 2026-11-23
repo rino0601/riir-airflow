@@ -1,14 +1,15 @@
 # 현재 아키텍처
 
-riir-airflow는 Python으로 CLI와 HTTP 서버를 연결하고, 일부 설정 판단과 응답 생성을
-PyO3를 통해 Rust에 맡깁니다. Apache Airflow는 별도의 웹 애플리케이션으로 마운트되며
-DAG, 메타데이터, 인증, UI와 Airflow API를 관리합니다.
+riir-airflow의 Python CLI는 기본 ASGI 서버와 선택형 Axum 서버를 제공합니다.
+두 방식 모두 PyO3를 통해 Rust 코드를 사용합니다. ASGI 방식에서 Apache Airflow는
+별도의 웹 애플리케이션으로 마운트되며 DAG, 메타데이터, 인증, UI와 Airflow API를 관리합니다.
 
 ```text
 riir-airflow serve → Uvicorn → riir_airflow.asgi:app (Starlette)
                               ├─ /health, /show → PyO3 → Rust
                               ├─ /openapi.json, /docs, /redoc → riir API 문서
                               └─ /airflow/* → Airflow 앱의 라우터 (마운트된 경우)
+riir-airflow serve --native → PyO3 → Axum → /health, /show
 ```
 
 ## CLI에서 서버 시작까지
@@ -18,21 +19,22 @@ riir-airflow serve → Uvicorn → riir_airflow.asgi:app (Starlette)
 `--mode`, `RIIR_MODE`, 기본값 `dev` 순으로 모드를 결정하고 하위 명령을 호출합니다.
 
 - `show`는 선택한 모드를 Rust 함수 `format_show_mode`에 넘기고 반환된 문자열을 표준 출력에 씁니다.
-- `serve`는 Rust 함수 `serve_options`에서 Uvicorn 옵션을 받아 Python의 `sh`로
-  `uvicorn riir_airflow.asgi:app`을 별도 프로세스로 실행합니다. 지원하지 않는 모드에는
-  안내 메시지를 출력하고 서버를 시작하지 않습니다.
+- `serve`는 Rust 함수 `serve_options`에서 설정을 받아 기본 ASGI 서버 또는
+  `--native`로 지정한 Axum 서버를 시작합니다. 기본 ASGI 서버는
+  `riir-airflow[compat]`가 필요하며, 같은 Python 인터프리터에서
+  `python -m uvicorn riir_airflow.asgi:app`을 별도 프로세스로 실행합니다.
+  지원하지 않는 모드에는 안내 메시지를 출력하고 서버를 시작하지 않습니다.
 
 | 모드 | `serve`가 넘기는 Uvicorn 옵션 | ASGI 앱에서 같은 모드를 읽었을 때 |
 | --- | --- | --- |
 | `dev` | 포트 8080, 자동 다시 로드 | riir 라우트만 등록 |
 | `prod` | 포트 80, 로그 수준 `info`, 워커 1개 | riir 라우트와 `/airflow` 마운트 등록 |
 
-CLI의 `--mode`는 하위 명령의 설정을 덮어씁니다. Uvicorn 프로세스에서 ASGI 모듈을
-가져올 때는 상속된 환경의 `RIIR_MODE`를 다시 읽으며, 값이 없으면 `dev`를 사용합니다.
-예를 들어 `riir-airflow --mode prod serve`는 포트 80을 선택하지만
-`RIIR_MODE`가 없으면 Airflow를 마운트하지 않습니다. 서버 옵션과 마운트 모두에
-`prod`를 적용하려면 Airflow 환경을 설정한 뒤 `RIIR_MODE=prod riir-airflow serve`로
-실행합니다. 환경 변수 목록은 [CLI와 설정](../reference/cli-and-configuration.md)을 참고하세요.
+CLI는 선택한 모드를 Uvicorn 프로세스에 `RIIR_MODE`로 전달합니다.
+예를 들어 초기화된 Airflow 환경에서 `riir-airflow --mode prod serve`를
+실행하면 포트 80에서 시작하고 `/airflow`를 마운트합니다. 두 방식 모두
+`serve --port PORT`로 포트를 지정할 수 있습니다. 환경 변수 목록은
+[CLI와 설정](../reference/cli-and-configuration.md)을 참고하세요.
 
 ## riir HTTP 요청 처리
 
@@ -46,6 +48,10 @@ Uvicorn은 요청을 ASGI로 전달하고 Python의 Starlette가 경로와 메�
 | `GET /health` | Rust가 JSON 본문 `{"status":"healthy"}`, 상태 코드 200, 미디어 타입을 반환하고 Starlette가 응답을 보냅니다. 이 응답은 Airflow나 DB 상태를 조회하지 않습니다. |
 | `GET /show` | Python이 요청의 상태 딕셔너리를 넘기고, Rust가 Python의 `pprint.pformat`을 호출한 뒤 결과를 `out`에 담습니다. Starlette가 이를 JSON으로 직렬화합니다. |
 | `/openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc` | Python이 패키지에 들어 있는 스키마와 API 문서 HTML을 제공합니다. 스키마와 Swagger UI·ReDoc 페이지는 ASGI의 `root_path`를 반영합니다. |
+
+Axum은 루프백 주소에서 HTTP/1 요청을 받아 `/health`, `/show`와 오류 응답을
+직접 처리합니다. `/show`는 빈 요청 상태에 같은 Python 포맷팅 함수를 사용합니다.
+Airflow 마운트, API 문서, 자동 리로드는 ASGI 방식에서 제공됩니다.
 
 ## Airflow 초기화와 하위 라우팅
 

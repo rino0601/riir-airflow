@@ -16,7 +16,7 @@ repo 를 여는 시점에, 이 프로젝트는 4가지 목표를 가지고 있�
 간단히 예를 들자면, 아래와 같은 provider 설치는 유효할 것입니다.
 
 ```shell
-pip install riir-airflow apache-airflow-providers-apache-flink[cncf.kubernetes]
+pip install "riir-airflow[compat]" apache-airflow-providers-apache-flink[cncf.kubernetes]
 # apache-airflow-providers-*** 들이 apache-airflow 에 의존성을 가지고 있기에, apache-airflow 와 그 의존성이 설치되는걸 막지는 못 함.
 ```
 

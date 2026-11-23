@@ -1,3 +1,5 @@
+mod native;
+
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyString};
 
@@ -41,21 +43,30 @@ fn airflow_mount_path(mode: &Bound<'_, PyAny>) -> PyResult<Option<&'static str>>
     Ok(mode.ne("dev")?.then_some("/airflow"))
 }
 
+const HEALTH_BODY: &str = r#"{"status":"healthy"}"#;
+
 /// Build the HTTP response for a successful health check.
 #[pyfunction]
 fn health_response(py: Python<'_>) -> (Bound<'_, PyBytes>, u16, &'static str) {
     (
-        PyBytes::new(py, br#"{"status":"healthy"}"#),
+        PyBytes::new(py, HEALTH_BODY.as_bytes()),
         200,
         "application/json",
     )
+}
+
+fn format_show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
+    state
+        .py()
+        .import("pprint")?
+        .call_method1("pformat", (state,))
 }
 
 /// Build the response for the ASGI request-state endpoint.
 #[pyfunction]
 fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
     let py = state.py();
-    let formatted = py.import("pprint")?.call_method1("pformat", (state,))?;
+    let formatted = format_show_state(state)?;
     let response = PyDict::new(py);
     response.set_item("out", formatted)?;
     Ok(response)
@@ -71,5 +82,6 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(show_state, m)?)?;
+    m.add_function(wrap_pyfunction!(native::serve_native, m)?)?;
     Ok(())
 }

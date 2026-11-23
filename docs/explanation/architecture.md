@@ -15,8 +15,10 @@ riir-airflow serve --native → PyO3 → Axum → /health, /show
 ## CLI에서 서버 시작까지
 
 패키지의 `riir-airflow` 명령과 `python -m riir_airflow`는 모두
-`riir_airflow.__main__:cli_app`으로 들어갑니다. Python의 Pydantic Settings가 최상위
-`--mode`, `RIIR_MODE`, 기본값 `dev` 순으로 모드를 결정하고 하위 명령을 호출합니다.
+`riir_airflow.__main__:cli_app`으로 들어갑니다. CLI는 최상위
+`--mode`, `RIIR_MODE`, 기본값 `dev` 순으로 모드를 결정합니다.
+일반적인 `serve --native` 호출은 Pydantic Settings를 불러오기 전에 처리합니다.
+도움말과 다른 인자 형식은 Pydantic Settings에서 처리합니다.
 
 - `show`는 선택한 모드를 Rust 함수 `format_show_mode`에 넘기고 반환된 문자열을 표준 출력에 씁니다.
 - `serve --native`는 모드와 포트 옵션을 Rust 함수 `serve_native`에 넘깁니다.

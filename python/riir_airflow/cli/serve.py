@@ -3,7 +3,8 @@ from sys import executable
 
 from pydantic import BaseModel, Field
 from pydantic_settings import CliImplicitFlag
-from riir_airflow._lowlevel import serve_native, serve_options
+from riir_airflow._lowlevel import serve_options
+from riir_airflow.cli._native import INVALID_MODE, run_native
 from riir_airflow.configuration import get_settings
 
 
@@ -32,20 +33,13 @@ class Serve(BaseModel):
     def cli_cmd(self) -> None:
         mode = get_settings().mode
         if self.native:
-            try:
-                if serve_native(mode, self.port):
-                    return
-            except KeyboardInterrupt:
-                # Python can deliver SIGINT after Axum has drained the listener.
-                return
-            except OSError as exc:
-                raise SystemExit(str(exc)) from None
-        else:
-            options = serve_options(mode)
-            if options is not None:
-                if self.port is not None:
-                    options["port"] = self.port
-                self._run_server(mode, **options)
-                return
+            run_native(mode, self.port)
+            return
 
-        print("Invalid parameter. Use 'prod' or 'dev'.")
+        options = serve_options(mode)
+        if options is None:
+            print(INVALID_MODE)
+            return
+        if self.port is not None:
+            options["port"] = self.port
+        self._run_server(mode, **options)

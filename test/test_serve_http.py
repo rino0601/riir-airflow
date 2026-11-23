@@ -43,7 +43,7 @@ def request(port, method, path):
 
 
 @contextmanager
-def server(directory, port, *args):
+def server(directory, port, *args, env=None):
     with (directory / f"serve-{port}.log").open("w+") as log:
         process = subprocess.Popen(
             cli(port, *args),
@@ -51,6 +51,7 @@ def server(directory, port, *args):
             stdout=log,
             stderr=log,
             start_new_session=True,
+            env=env,
         )
         try:
             deadline = time.monotonic() + 30
@@ -76,6 +77,28 @@ def server(directory, port, *args):
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.wait(timeout=5)
+
+
+def test_installed_native_server_skips_settings_imports(tmp_path):
+    (tmp_path / "sitecustomize.py").write_text(
+        """
+import sys
+
+
+class RejectSettingsImports:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".")[0] == "pydantic_settings" or fullname == "riir_airflow.configuration":
+            raise AssertionError(f"Unexpected native startup import: {fullname}")
+
+
+sys.meta_path.insert(0, RejectSettingsImports())
+"""
+    )
+    port = free_port()
+    with server(
+        tmp_path, port, "--native", env={**os.environ, "PYTHONPATH": str(tmp_path)}
+    ):
+        assert request(port, "GET", "/health")[0] == 200
 
 
 def test_installed_servers_match_on_shared_http_routes(tmp_path):

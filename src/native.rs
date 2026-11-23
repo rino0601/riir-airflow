@@ -8,10 +8,9 @@ use axum::routing::on;
 use axum::{Router, routing::MethodFilter};
 use percent_encoding::percent_decode_str;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
 use tokio::net::TcpListener;
 
-use crate::{HEALTH_BODY, format_show_state};
+use crate::HEALTH_BODY;
 
 fn json(status: StatusCode, body: impl Into<String>) -> Response {
     (
@@ -27,19 +26,9 @@ async fn health() -> Response {
 }
 
 async fn show() -> Response {
-    let body = Python::attach(|py| -> PyResult<String> {
-        // The native listener starts with empty request state, like Uvicorn.
-        let state = PyDict::new(py);
-        let formatted: String = format_show_state(state.as_any())?.extract()?;
-        Ok(serde_json::json!({"out": formatted}).to_string())
-    });
-    match body {
-        Ok(body) => json(StatusCode::OK, body),
-        Err(error) => {
-            Python::attach(|py| error.print(py));
-            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response()
-        }
-    }
+    // Native requests have no application state to format.
+    let body = serde_json::json!({"out": "{}"}).to_string();
+    json(StatusCode::OK, body)
 }
 
 async fn method_not_allowed() -> Response {

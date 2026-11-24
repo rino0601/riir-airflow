@@ -1,7 +1,7 @@
 use std::ffi::OsString;
 
-use crate::cli::{self, ServeMode, Subcommand};
 use crate::HEALTH_BODY;
+use crate::cli::{self, ServeMode, Subcommand};
 use crate::native::serve;
 
 use pyo3::prelude::*;

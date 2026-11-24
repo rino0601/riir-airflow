@@ -1,5 +1,3 @@
-// The native fallback will call the adapter once route wiring lands.
-#[allow(dead_code)]
 mod asgi_bridge;
 mod cli;
 mod native;

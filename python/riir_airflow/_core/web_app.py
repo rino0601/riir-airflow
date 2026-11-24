@@ -55,20 +55,21 @@ async def http_error(request: Request, exc: HTTPException) -> Response:
     )
 
 
-health_route = Route("/health", h, methods=["GET"])
-show_route = Route("/show", show, methods=["GET"])
-# Starlette automatically adds HEAD to GET routes. These two were GET-only.
-health_route.methods.remove("HEAD")
-show_route.methods.remove("HEAD")
+def create_web_app() -> Starlette:
+    health_route = Route("/health", h, methods=["GET"])
+    show_route = Route("/show", show, methods=["GET"])
+    # Starlette automatically adds HEAD to GET routes. These two were GET-only.
+    health_route.methods.remove("HEAD")
+    show_route.methods.remove("HEAD")
 
-web_app = Starlette(
-    routes=[
-        Route("/openapi.json", openapi),
-        Route("/docs", swagger_ui_html),
-        Route("/docs/oauth2-redirect", swagger_ui_redirect),
-        Route("/redoc", redoc_html),
-        health_route,
-        show_route,
-    ],
-    exception_handlers={HTTPException: http_error},
-)
+    return Starlette(
+        routes=[
+            Route("/openapi.json", openapi),
+            Route("/docs", swagger_ui_html),
+            Route("/docs/oauth2-redirect", swagger_ui_redirect),
+            Route("/redoc", redoc_html),
+            health_route,
+            show_route,
+        ],
+        exception_handlers={HTTPException: http_error},
+    )

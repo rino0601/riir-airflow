@@ -133,11 +133,12 @@ fn settings_mode() -> OsString {
 #[pyfunction]
 #[pyo3(signature = (mode, port=None))]
 fn serve_native(py: Python<'_>, mode: &Bound<'_, PyString>, port: Option<u16>) -> PyResult<bool> {
-    let Some(mode) = py_serve_mode(mode)? else {
+    let Some(serve_mode) = py_serve_mode(mode)? else {
         return Ok(false);
     };
-    let port = port.unwrap_or_else(|| mode.default_port());
-    py.detach(|| serve(port))?;
+    let port = port.unwrap_or_else(|| serve_mode.default_port());
+    let mode = mode.to_str()?.to_owned();
+    py.detach(move || serve(port, &mode))?;
     Ok(true)
 }
 

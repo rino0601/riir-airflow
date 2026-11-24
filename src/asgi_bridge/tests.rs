@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::time::Duration;
 
-use axum::body::Bytes;
+use axum::body::to_bytes;
 use pyo3::types::PyModule;
 
 use super::*;
@@ -175,7 +175,6 @@ def factory():
                 await send(dict(body, body="not bytes"))
             case "/exception":
                 await send(start)
-                await send(body)
                 raise RuntimeError("private token")
     return app
 "#,
@@ -236,7 +235,14 @@ def factory():
         StatusCode::PAYLOAD_TOO_LARGE
     );
     let fits = Request::new(Body::from("123"));
-    let error = app.bridge.call(fits, connection()).await.unwrap_err();
+    let response = app.bridge.call(fits, connection()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let mut body = response.into_body();
+    assert_eq!(
+        body.frame().await.unwrap().unwrap().into_data().unwrap(),
+        "12"
+    );
+    let error = body.frame().await.unwrap().unwrap_err();
     assert!(format!("{error:?}").contains("ResponseTooLarge"));
 }
 
@@ -279,3 +285,5 @@ def factory():
     assert_eq!(read_body(first.unwrap()).await, "/first");
     assert_eq!(read_body(second.unwrap()).await, "/second");
 }
+
+mod http;

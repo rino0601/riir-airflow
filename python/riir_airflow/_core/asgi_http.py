@@ -1,6 +1,8 @@
-"""Exchange buffered HTTP messages with an app on the ASGI runtime."""
+"""Exchange streaming HTTP messages with an app on the ASGI runtime."""
 
 import asyncio
+
+from .asgi_bridge import RequestTimeout
 
 
 class HTTPProtocolError(ValueError):
@@ -12,34 +14,39 @@ class ResponseTooLarge(HTTPProtocolError):
 
 
 class _Exchange:
-    def __init__(self, body, limit):
-        self.request_body = body
+    def __init__(self, scope, transport, limit):
+        self.transport = transport
+        self.is_head = scope["method"] == "HEAD"
         self.limit = limit
         self.status = None
-        self.headers = ()
-        self.body = bytearray()
         self.complete = False
         self.error = None
+        self.sent = 0
+        self.send_lock = asyncio.Lock()
+        self.receive_lock = asyncio.Lock()
 
     async def receive(self):
-        if self.request_body is None:
-            # This adapter has no transport disconnect information.
-            await asyncio.get_running_loop().create_future()
-        body, self.request_body = self.request_body, None
-        return {"type": "http.request", "body": body, "more_body": False}
+        async with self.receive_lock:
+            result = await self.transport.receive()
+            if result is None:
+                return {"type": "http.disconnect"}
+            self.transport.consume_request_chunk()
+            body, more = result
+            return {"type": "http.request", "body": bytes(body), "more_body": more}
 
     async def send(self, message):
-        if self.error is not None:
-            raise self.error
-        if self.complete:
-            return
-        try:
-            self._send(message)
-        except HTTPProtocolError as error:
-            self.error = error
-            raise
+        async with self.send_lock:
+            if self.error is not None:
+                raise self.error
+            if self.complete:
+                return
+            try:
+                await self._send(message)
+            except (ValueError, OSError) as error:
+                self.error = error
+                raise
 
-    def _send(self, message):
+    async def _send(self, message):
         if not isinstance(message, dict):
             raise HTTPProtocolError("Expected an ASGI HTTP message dictionary")
         event = message.get("type")
@@ -52,30 +59,43 @@ class _Exchange:
                 raise HTTPProtocolError("Expected a final HTTP status code")
             if message.get("trailers", False) is not False:
                 raise HTTPProtocolError("HTTP response trailers are unsupported")
-            self.headers = _headers(message.get("headers", ()))
+            headers = _headers(message.get("headers", ()))
+            self.length, self.forbids_body, self.suppress_body = self.transport.start(
+                status, headers, self.is_head
+            )
             self.status = status
         elif self.status is not None and event == "http.response.body":
             body = message.get("body", b"")
             more = message.get("more_body", False)
             if type(body) is not bytes or type(more) is not bool:
                 raise HTTPProtocolError("Expected bytes body and boolean more_body")
-            if len(body) > self.limit - len(self.body):
+            self.sent += len(body)
+            if self.sent > self.limit:
                 raise ResponseTooLarge(
                     "ASGI response body exceeds the configured limit"
                 )
-            self.body.extend(body)
+            if self.forbids_body and body:
+                raise HTTPProtocolError("Response status forbids a body")
+            if self.length is not None:
+                metadata_only = self.sent == 0 and (self.is_head or self.status == 304)
+                if self.sent > self.length or (
+                    not more and not metadata_only and self.sent != self.length
+                ):
+                    raise HTTPProtocolError("Invalid response Content-Length")
+            await self.transport.send_body(
+                b"" if self.suppress_body else body, not more
+            )
             self.complete = not more
         else:
             raise HTTPProtocolError("Unexpected ASGI HTTP response event")
 
-    def result(self):
+    def check_complete(self):
         if self.error is not None:
             raise self.error
         if not self.complete:
             raise HTTPProtocolError(
                 "ASGI app returned without a complete HTTP response"
             )
-        return self.status, self.headers, bytes(self.body)
 
 
 def _headers(headers):
@@ -96,19 +116,19 @@ def _headers(headers):
     return pairs
 
 
-def submit_http(runtime, scope, body, response_limit, done):
-    """Invoke done with the response or exception once the runtime call ends."""
-    exchange = _Exchange(body, response_limit)
-    future = runtime.submit(scope, exchange.receive, exchange.send)
+def submit_http(runtime, scope, transport, response_limit, timeout):
+    """Schedule the bounded exchange and report its final result."""
+    exchange = _Exchange(scope, transport, response_limit)
+    future = runtime.submit(scope, exchange.receive, exchange.send, timeout=timeout)
 
     def completed(future):
         try:
-            # The concurrent future is already done when the callback runs.
             future.result()
-            response = exchange.result()
+            exchange.check_complete()
         except BaseException as error:
-            done(None, error)
+            transport.done(error, isinstance(error, RequestTimeout), future.cancelled())
         else:
-            done(response, None)
+            transport.done(None, False, False)
 
     future.add_done_callback(completed)
+    return future

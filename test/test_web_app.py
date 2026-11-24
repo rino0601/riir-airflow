@@ -43,6 +43,31 @@ def test_show_single_string_entry_without_pprint(client, monkeypatch, state):
     )
 
 
+@pytest.mark.parametrize(("value", "key_length"), [(True, 70), (False, 69), (None, 70)])
+@pytest.mark.parametrize("escaped", [False, True])
+def test_show_single_bool_or_none_without_pprint(
+    client, monkeypatch, value, key_length, escaped
+):
+    key = "'\"\\\n\t\ud800" if escaped else "🦀" * key_length
+    state = {key: value}
+    expected = pformat(state)
+    if not escaped:
+        assert len(expected) == 80
+    client.app_state.update(state)
+    monkeypatch.setitem(sys.modules, "pprint", None)
+
+    response = client.get("/show")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert (
+        response.content
+        == json.dumps(
+            {"out": expected}, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    )
+
+
 def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
     class CustomString(str):
         def __repr__(self):
@@ -55,6 +80,14 @@ def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
         {"k": "한 " * 60},
         {"k": CustomString("value")},
         {CustomString("key"): "v"},
+        {"🦀" * 71: True},
+        {"🦀" * 70: False},
+        {"🦀" * 71: None},
+        {"\n" * 36: True},
+        {CustomString("key"): True},
+        {"k": 1},
+        {"k": 0},
+        {"k": None, "other": False},
     ):
         client.app_state.clear()
         client.app_state.update(state)

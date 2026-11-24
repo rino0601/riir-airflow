@@ -6,7 +6,7 @@ use crate::{EMPTY_SHOW_STATE, HEALTH_BODY};
 
 use pyo3::prelude::*;
 use pyo3::sync::critical_section::with_critical_section;
-use pyo3::types::{PyBytes, PyDict, PyString};
+use pyo3::types::{PyBool, PyBoolMethods, PyBytes, PyDict, PyString};
 
 /// Prints a message.
 #[pyfunction]
@@ -80,7 +80,7 @@ fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
         .is_ok_and(|dict| dict.is_empty())
     {
         response.set_item("out", EMPTY_SHOW_STATE)?;
-    } else if let Some(formatted) = format_single_string_entry(state) {
+    } else if let Some(formatted) = format_single_entry(state) {
         response.set_item("out", formatted)?;
     } else {
         let formatted = py.import("pprint")?.call_method1("pformat", (state,))?;
@@ -89,7 +89,7 @@ fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
     Ok(response)
 }
 
-fn format_single_string_entry(state: &Bound<'_, PyAny>) -> Option<String> {
+fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
     let dict = state.cast_exact::<PyDict>().ok()?;
     let (key, value) = with_critical_section(state, || {
         if dict.len() == 1 {
@@ -99,9 +99,20 @@ fn format_single_string_entry(state: &Bound<'_, PyAny>) -> Option<String> {
         }
     })?;
     let key = key.cast_exact::<PyString>().ok()?.repr().ok()?;
-    let value = value.cast_exact::<PyString>().ok()?.repr().ok()?;
     let key = key.to_str().ok()?;
-    let value = value.to_str().ok()?;
+    let value_repr;
+    let value = if value.is_none() {
+        "None"
+    } else if let Ok(value) = value.cast_exact::<PyBool>() {
+        if PyBoolMethods::is_true(value) {
+            "True"
+        } else {
+            "False"
+        }
+    } else {
+        value_repr = value.cast_exact::<PyString>().ok()?.repr().ok()?;
+        value_repr.to_str().ok()?
+    };
     // A singleton needs no key comparisons. pprint counts Unicode code points
     // and dispatches to its multiline formatter above the default width of 80.
     (key.chars().count() + value.chars().count() + 4 <= 80).then(|| format!("{{{key}: {value}}}"))

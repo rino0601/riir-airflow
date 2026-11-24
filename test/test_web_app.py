@@ -126,9 +126,20 @@ class CustomString(str):
         ({"z": "v", CustomString("a"): "v"}, True, None),
         ({"z": "v", "a": 0}, True, None),
         ({"z": "v", 0: "v"}, True, None),
+        ({"z": True, "a": "first"}, False, None),
+        ({"z": "last", "a": False}, False, None),
+        ({"🦀": None, "\ud800": "한'\"\\\n\ud800"}, False, None),
+        ({"z": "a'b", "\n": False}, False, None),
+        pytest.param({"z": "🦀" * 60, "a": None}, False, 80, id="mixed-width-80"),
+        pytest.param({"z": "🦀" * 61, "a": None}, True, 81, id="mixed-width-81"),
+        ({"z": CustomString("v"), "a": True}, True, None),
+        ({"z": "v", CustomString("a"): None}, True, None),
+        ({"z": "v", 0: False}, True, None),
+        ({"z": True, "a": None}, True, None),
+        ({"z": False, "a": 0}, True, None),
     ],
 )
-def test_show_two_string_entries(client, monkeypatch, state, uses_pprint, width):
+def test_show_two_entries(client, monkeypatch, state, uses_pprint, width):
     expected = pformat(state)
     if width is not None:
         assert len(pformat(state, width=100)) == width

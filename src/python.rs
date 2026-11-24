@@ -82,8 +82,7 @@ fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
         .is_ok_and(|dict| dict.is_empty())
     {
         response.set_item("out", EMPTY_SHOW_STATE)?;
-    } else if let Some(formatted) =
-        format_single_entry(state).or_else(|| format_two_string_entries(state))
+    } else if let Some(formatted) = format_single_entry(state).or_else(|| format_two_entries(state))
     {
         response.set_item("out", formatted)?;
     } else {
@@ -106,14 +105,8 @@ fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
     let key = key.to_str().ok()?;
     let integer_repr;
     let value_repr;
-    let value = if value.is_none() {
-        "None"
-    } else if let Ok(value) = value.cast_exact::<PyBool>() {
-        if PyBoolMethods::is_true(value) {
-            "True"
-        } else {
-            "False"
-        }
+    let value = if let Some(value) = repr_bool_or_none(&value) {
+        value
     } else if let Ok(value) = value.cast_exact::<PyInt>() {
         integer_repr = value.extract::<i64>().ok()?.to_string();
         &integer_repr
@@ -131,7 +124,16 @@ fn repr_exact_string<'py>(value: &Bound<'py, PyAny>) -> Option<Bound<'py, PyStri
     value.cast_exact::<PyString>().ok()?.repr().ok()
 }
 
-fn format_two_string_entries(state: &Bound<'_, PyAny>) -> Option<String> {
+fn repr_bool_or_none(value: &Bound<'_, PyAny>) -> Option<&'static str> {
+    if value.is_none() {
+        Some("None")
+    } else {
+        let value = value.cast_exact::<PyBool>().ok()?;
+        Some(if value.is_true() { "True" } else { "False" })
+    }
+}
+
+fn format_two_entries(state: &Bound<'_, PyAny>) -> Option<String> {
     let dict = state.cast_exact::<PyDict>().ok()?;
     let ((first_key, first_value), (second_key, second_value)) =
         with_critical_section(state, || {
@@ -143,8 +145,14 @@ fn format_two_string_entries(state: &Bound<'_, PyAny>) -> Option<String> {
         })?;
     let first_key = first_key.cast_exact::<PyString>().ok()?;
     let second_key = second_key.cast_exact::<PyString>().ok()?;
-    let first_value = repr_exact_string(&first_value)?;
-    let second_value = repr_exact_string(&second_value)?;
+    let first_repr = repr_exact_string(&first_value);
+    let second_repr = repr_exact_string(&second_value);
+    let (first_value, second_value) = match (&first_repr, &second_repr) {
+        (Some(first), Some(second)) => (first.to_str().ok()?, second.to_str().ok()?),
+        (Some(first), None) => (first.to_str().ok()?, repr_bool_or_none(&second_value)?),
+        (None, Some(second)) => (repr_bool_or_none(&first_value)?, second.to_str().ok()?),
+        (None, None) => return None,
+    };
 
     // Compare the original Python strings so escape sequences and lone
     // surrogates sort the same way as pprint's exact string keys.
@@ -158,9 +166,9 @@ fn format_two_string_entries(state: &Bound<'_, PyAny>) -> Option<String> {
     let second_key = second_key.repr().ok()?;
     let parts = [
         first_key.to_str().ok()?,
-        first_value.to_str().ok()?,
+        first_value,
         second_key.to_str().ok()?,
-        second_value.to_str().ok()?,
+        second_value,
     ];
     let width = parts.iter().map(|part| part.chars().count()).sum::<usize>() + 8;
     let [first_key, first_value, second_key, second_value] = parts;

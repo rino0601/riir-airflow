@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Python 코드를 포맷한다.
+# Python과 Rust 코드를 포맷한다.
 uv run ruff format .
+cargo fmt --all

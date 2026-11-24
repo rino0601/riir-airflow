@@ -448,6 +448,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "http-body-util",
  "percent-encoding",
  "pyo3",
  "serde_json",

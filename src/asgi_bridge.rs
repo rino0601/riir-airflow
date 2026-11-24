@@ -51,7 +51,11 @@ pub(crate) enum BridgeError {
 
 impl fmt::Display for BridgeError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{self:?}")
+        match self {
+            Self::RequestBody(error) => write!(formatter, "could not read request body: {error}"),
+            Self::Python(error) => write!(formatter, "{error}"),
+            _ => write!(formatter, "{self:?}"),
+        }
     }
 }
 

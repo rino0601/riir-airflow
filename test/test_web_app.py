@@ -108,11 +108,51 @@ def test_show_single_int_entry(client, monkeypatch, state, uses_pprint):
         formatter.assert_not_called()
 
 
-def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
-    class CustomString(str):
-        def __repr__(self):
-            return "<custom>"
+class CustomString(str):
+    def __repr__(self):
+        return "<custom>"
 
+
+@pytest.mark.parametrize(
+    ("state", "uses_pprint", "width"),
+    [
+        ({"z": "last", "a": "first"}, False, None),
+        ({"🦀": "한글", "z": "'\"\\\n", "\ud800": "v"}, True, None),
+        ({"🦀": "한글", "\ud800": "'\"\\\n"}, False, None),
+        ({"z": "a'b", "\n": 'a"b'}, False, None),
+        ({"z": "🦀" * 61, "a": "한"}, False, 80),
+        ({"z": "🦀" * 62, "a": "한"}, True, 81),
+        ({"z": "v", "a": CustomString("v")}, True, None),
+        ({"z": "v", CustomString("a"): "v"}, True, None),
+        ({"z": "v", "a": 0}, True, None),
+        ({"z": "v", 0: "v"}, True, None),
+    ],
+)
+def test_show_two_string_entries(client, monkeypatch, state, uses_pprint, width):
+    expected = pformat(state)
+    if width is not None:
+        assert len(pformat(state, width=100)) == width
+    formatter = Mock(wraps=pformat)
+    monkeypatch.setattr(pprint, "pformat", formatter)
+    client.app_state.update(state)
+
+    response = client.get("/show")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert (
+        response.content
+        == json.dumps(
+            {"out": expected}, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    )
+    if uses_pprint:
+        formatter.assert_called_once_with(state)
+    else:
+        formatter.assert_not_called()
+
+
+def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
     formatter = Mock(wraps=pformat)
     monkeypatch.setattr(pprint, "pformat", formatter)
     for state in (

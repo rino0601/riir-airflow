@@ -68,6 +68,46 @@ def test_show_single_bool_or_none_without_pprint(
     )
 
 
+class CustomInt(int):
+    def __repr__(self):
+        return "<custom int>"
+
+    def __int__(self):
+        raise AssertionError("int subclass must use pprint")
+
+
+@pytest.mark.parametrize(
+    ("state", "uses_pprint"),
+    [
+        ({"k": 0}, False),
+        ({"'\"\\\n\ud800": -42}, False),
+        ({"k": -(2**63)}, False),
+        ({"k": 2**63 - 1}, False),
+        ({"k": -(2**63) - 1}, True),
+        ({"k": 2**63}, True),
+        ({"k": CustomInt(1)}, True),
+        pytest.param({"🦀" * 72: -1}, False, id="width-80"),
+        pytest.param({"🦀" * 73: -1}, True, id="width-81"),
+        ({"\n" * 38: 0}, True),
+    ],
+)
+def test_show_single_int_entry(client, monkeypatch, state, uses_pprint):
+    expected = pformat(state)
+    formatter = Mock(wraps=pformat)
+    monkeypatch.setattr(pprint, "pformat", formatter)
+    client.app_state.update(state)
+
+    response = client.get("/show")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.json() == {"out": expected}
+    if uses_pprint:
+        formatter.assert_called_once_with(state)
+    else:
+        formatter.assert_not_called()
+
+
 def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
     class CustomString(str):
         def __repr__(self):
@@ -85,8 +125,8 @@ def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
         {"🦀" * 71: None},
         {"\n" * 36: True},
         {CustomString("key"): True},
-        {"k": 1},
-        {"k": 0},
+        {CustomString("key"): 1},
+        {"k": 1, "other": 0},
         {"k": None, "other": False},
     ):
         client.app_state.clear()

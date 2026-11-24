@@ -6,7 +6,7 @@ use crate::{EMPTY_SHOW_STATE, HEALTH_BODY};
 
 use pyo3::prelude::*;
 use pyo3::sync::critical_section::with_critical_section;
-use pyo3::types::{PyBool, PyBoolMethods, PyBytes, PyDict, PyString};
+use pyo3::types::{PyBool, PyBoolMethods, PyBytes, PyDict, PyInt, PyString};
 
 /// Prints a message.
 #[pyfunction]
@@ -100,6 +100,7 @@ fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
     })?;
     let key = key.cast_exact::<PyString>().ok()?.repr().ok()?;
     let key = key.to_str().ok()?;
+    let integer_repr;
     let value_repr;
     let value = if value.is_none() {
         "None"
@@ -109,6 +110,9 @@ fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
         } else {
             "False"
         }
+    } else if let Ok(value) = value.cast_exact::<PyInt>() {
+        integer_repr = value.extract::<i64>().ok()?.to_string();
+        &integer_repr
     } else {
         value_repr = value.cast_exact::<PyString>().ok()?.repr().ok()?;
         value_repr.to_str().ok()?

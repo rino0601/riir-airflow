@@ -1,3 +1,7 @@
+[settings]
+# Limit parallel tasks and tool installs by default. Override with --jobs or MISE_JOBS.
+jobs = 2
+
 [tools]
 uv = "0.13.9"
 # pyo3/maturin 빌드용 최신 안정 Rust 툴체인 (pyo3 0.30의 MSRV 1.85 이상)

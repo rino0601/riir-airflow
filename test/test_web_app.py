@@ -1,8 +1,18 @@
+import sys
 from pprint import pformat
 
 import pytest
 from riir_airflow.asgi import app
 from starlette.testclient import TestClient
+
+
+def test_show_empty_state_without_pprint(client, monkeypatch):
+    monkeypatch.setitem(sys.modules, "pprint", None)
+
+    response = client.get("/show")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert response.content == b'{"out":"{}"}'
 
 
 def test_read_main(client):

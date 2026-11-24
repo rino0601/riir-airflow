@@ -49,7 +49,7 @@ Uvicorn은 요청을 ASGI로 전달하고 Python의 Starlette가 경로와 메�
 | 경로 | 처리 |
 | --- | --- |
 | `GET /health` | Rust가 JSON 본문 `{"status":"healthy"}`, 상태 코드 200, 미디어 타입을 반환하고 Starlette가 응답을 보냅니다. 이 응답은 Airflow나 DB 상태를 조회하지 않습니다. |
-| `GET /show` | Python이 요청의 상태 딕셔너리를 넘기고, Rust가 Python의 `pprint.pformat`을 호출한 뒤 결과를 `out`에 담습니다. Starlette가 이를 JSON으로 직렬화합니다. |
+| `GET /show` | Rust는 비어 있는 기본 딕셔너리를 `{}`로 표시합니다. 그 외의 상태는 Python의 `pprint.pformat`으로 처리합니다. Starlette가 `out` 필드가 담긴 응답을 JSON으로 직렬화합니다. |
 | `/openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc` | Python이 패키지에 들어 있는 스키마와 API 문서 HTML을 제공합니다. 스키마와 Swagger UI·ReDoc 페이지는 ASGI의 `root_path`를 반영합니다. |
 
 Axum은 루프백 주소에서 HTTP/1 요청을 받아 `/health`, `/show`와 오류 응답을

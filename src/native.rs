@@ -9,7 +9,7 @@ use axum::{Router, routing::MethodFilter};
 use percent_encoding::percent_decode_str;
 use tokio::net::TcpListener;
 
-use crate::HEALTH_BODY;
+use crate::{EMPTY_SHOW_STATE, HEALTH_BODY};
 
 fn json(status: StatusCode, body: impl Into<String>) -> Response {
     (
@@ -26,7 +26,7 @@ async fn health() -> Response {
 
 async fn show() -> Response {
     // Native requests have no application state to format.
-    let body = serde_json::json!({"out": "{}"}).to_string();
+    let body = serde_json::json!({"out": EMPTY_SHOW_STATE}).to_string();
     json(StatusCode::OK, body)
 }
 

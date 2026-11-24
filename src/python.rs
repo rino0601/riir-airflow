@@ -1,8 +1,8 @@
 use std::ffi::OsString;
 
-use crate::HEALTH_BODY;
 use crate::cli::{self, ServeMode, Subcommand};
 use crate::native::serve;
+use crate::{EMPTY_SHOW_STATE, HEALTH_BODY};
 
 use pyo3::prelude::*;
 use pyo3::types::{PyBytes, PyDict, PyString};
@@ -68,20 +68,21 @@ fn health_response(py: Python<'_>) -> (Bound<'_, PyBytes>, u16, &'static str) {
     )
 }
 
-fn format_show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyAny>> {
-    state
-        .py()
-        .import("pprint")?
-        .call_method1("pformat", (state,))
-}
-
 /// Build the response for the ASGI request-state endpoint.
 #[pyfunction]
 fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
     let py = state.py();
-    let formatted = format_show_state(state)?;
     let response = PyDict::new(py);
-    response.set_item("out", formatted)?;
+    // Dict subclasses may override repr even when they are empty.
+    if state
+        .cast_exact::<PyDict>()
+        .is_ok_and(|dict| dict.is_empty())
+    {
+        response.set_item("out", EMPTY_SHOW_STATE)?;
+    } else {
+        let formatted = py.import("pprint")?.call_method1("pformat", (state,))?;
+        response.set_item("out", formatted)?;
+    }
     Ok(response)
 }
 

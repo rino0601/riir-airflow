@@ -4,7 +4,7 @@ set -euo pipefail
 # prek 설정 검사 → 포맷/린트 → 테스트 → 문서 빌드 순서로 실행한다.
 # prek 훅이 이 태스크를 호출하므로 여기서는 prek run --all-files를 다시 실행하지 않는다.
 uv run prek validate-config prek.toml
-uv run ruff format --check .
+mise run format-check
 uv run ruff check .
 uv run pytest -q
 mise run test-differential

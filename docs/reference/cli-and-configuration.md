@@ -57,10 +57,10 @@ Airflow가 사용하는 FastAPI를 통해 `pydantic-settings`가 전이 의존�
 | 명령 | 동작 |
 | --- | --- |
 | `mise run setup` | `uv sync`, `.env` 생성, prek 훅 설치 |
-| `mise run check` | prek 설정 검사, 포맷/린트, 테스트, Zensical 빌드 |
+| `mise run check` | prek 설정 검사, `mise run format-check`, Ruff 린트, 일반 및 차분 테스트, Zensical 빌드 |
 | `mise run build` | maturin으로 pyo3 확장 모듈 빌드 |
-| `mise run format` | `ruff format` |
-| `mise run format-check` | `ruff format --check` |
+| `mise run format` | Python `ruff format .`, Rust `cargo fmt --all` |
+| `mise run format-check` | Python `ruff format --check .`, Rust `cargo fmt --all -- --check` (파일 수정 없음) |
 | `mise run lint` | `ruff check` |
 | `mise run lint-fix` | `ruff check --fix` |
 | `mise run test` | `pytest` |

@@ -12,9 +12,19 @@ hooks = [
     { id = "check-merge-conflict", args = ["--assume-in-merge"] },
 ]
 
-# 저장소 검사의 단일 진입점인 mise run check를 커밋 훅에서 호출한다.
+# 포맷을 먼저 적용한 뒤 저장소 전체를 검사한다.
 [[repos]]
 repo = "local"
+
+[[repos.hooks]]
+id = "mise-format"
+name = "mise run format"
+entry = "uv run mise run format"
+language = "system"
+pass_filenames = false
+always_run = true
+# 파일이 바뀌면 변경 사항을 확인하고 다시 스테이징한 뒤 커밋한다.
+fail_fast = true
 
 [[repos.hooks]]
 id = "mise-check"

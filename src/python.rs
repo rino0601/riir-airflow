@@ -8,6 +8,8 @@ use pyo3::prelude::*;
 use pyo3::sync::critical_section::with_critical_section;
 use pyo3::types::{PyBool, PyBoolMethods, PyBytes, PyDict, PyInt, PyString};
 
+const PPRINT_WIDTH: usize = 80;
+
 /// Prints a message.
 #[pyfunction]
 fn hello() -> PyResult<String> {
@@ -80,7 +82,9 @@ fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
         .is_ok_and(|dict| dict.is_empty())
     {
         response.set_item("out", EMPTY_SHOW_STATE)?;
-    } else if let Some(formatted) = format_single_entry(state) {
+    } else if let Some(formatted) =
+        format_single_entry(state).or_else(|| format_two_string_entries(state))
+    {
         response.set_item("out", formatted)?;
     } else {
         let formatted = py.import("pprint")?.call_method1("pformat", (state,))?;
@@ -98,7 +102,7 @@ fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
             None
         }
     })?;
-    let key = key.cast_exact::<PyString>().ok()?.repr().ok()?;
+    let key = repr_exact_string(&key)?;
     let key = key.to_str().ok()?;
     let integer_repr;
     let value_repr;
@@ -114,12 +118,54 @@ fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
         integer_repr = value.extract::<i64>().ok()?.to_string();
         &integer_repr
     } else {
-        value_repr = value.cast_exact::<PyString>().ok()?.repr().ok()?;
+        value_repr = repr_exact_string(&value)?;
         value_repr.to_str().ok()?
     };
     // A singleton needs no key comparisons. pprint counts Unicode code points
     // and dispatches to its multiline formatter above the default width of 80.
-    (key.chars().count() + value.chars().count() + 4 <= 80).then(|| format!("{{{key}: {value}}}"))
+    (key.chars().count() + value.chars().count() + 4 <= PPRINT_WIDTH)
+        .then(|| format!("{{{key}: {value}}}"))
+}
+
+fn repr_exact_string<'py>(value: &Bound<'py, PyAny>) -> Option<Bound<'py, PyString>> {
+    value.cast_exact::<PyString>().ok()?.repr().ok()
+}
+
+fn format_two_string_entries(state: &Bound<'_, PyAny>) -> Option<String> {
+    let dict = state.cast_exact::<PyDict>().ok()?;
+    let ((first_key, first_value), (second_key, second_value)) =
+        with_critical_section(state, || {
+            if dict.len() != 2 {
+                return None;
+            }
+            let mut entries = dict.iter();
+            Some((entries.next()?, entries.next()?))
+        })?;
+    let first_key = first_key.cast_exact::<PyString>().ok()?;
+    let second_key = second_key.cast_exact::<PyString>().ok()?;
+    let first_value = repr_exact_string(&first_value)?;
+    let second_value = repr_exact_string(&second_value)?;
+
+    // Compare the original Python strings so escape sequences and lone
+    // surrogates sort the same way as pprint's exact string keys.
+    let (first_key, first_value, second_key, second_value) =
+        if second_key.as_any().lt(first_key).ok()? {
+            (second_key, second_value, first_key, first_value)
+        } else {
+            (first_key, first_value, second_key, second_value)
+        };
+    let first_key = first_key.repr().ok()?;
+    let second_key = second_key.repr().ok()?;
+    let parts = [
+        first_key.to_str().ok()?,
+        first_value.to_str().ok()?,
+        second_key.to_str().ok()?,
+        second_value.to_str().ok()?,
+    ];
+    let width = parts.iter().map(|part| part.chars().count()).sum::<usize>() + 8;
+    let [first_key, first_value, second_key, second_value] = parts;
+    (width <= PPRINT_WIDTH)
+        .then(|| format!("{{{first_key}: {first_value}, {second_key}: {second_value}}}"))
 }
 
 type ParsedCli = (OsString, &'static str, bool, Option<u16>);

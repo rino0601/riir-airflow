@@ -13,9 +13,12 @@
 최상위 `--mode` 옵션이 `show`와 `serve`가 사용하는 모드를 결정하며, 없으면 `RIIR_MODE`(기본값 `dev`)를 사용합니다.
 
 두 방식 모두 `serve --port PORT`로 포트를 바꿀 수 있습니다. Axum 서버에는
-Airflow UI, 인증, 플러그인, API 문서 및 자동 리로드가 없으므로 이런 기능을
-사용하려면 기본 ASGI 방식으로 실행합니다. ASGI는 `dev`에서 자동 리로드를
-사용하며, `prod`에서 초기화된 Airflow를 `/airflow`에 마운트합니다.
+`compat`가 설치되어 있으면 미매칭 HTTP 경로를 같은 프로세스의 호환 ASGI 앱에
+전달합니다. 두 서버의 호환 앱은 `dev`와 `prod`에서 riir API 문서를 제공합니다.
+`prod`에서는 Airflow UI·API·인증을 `/airflow`에 마운트합니다.
+자동 리로드는 Uvicorn의 `dev` 모드에서 제공됩니다. 기본 wheel만 설치한 Axum은
+미매칭 경로에 JSON 404를 반환합니다. Axum은 루프백의 단일 HTTP/1 포트를
+사용하며 WebSocket은 지원 범위 밖입니다.
 
 설치한 Python 환경에서는 `python -m riir_airflow`로 같은 하위 명령과 옵션을 사용할 수 있습니다.
 

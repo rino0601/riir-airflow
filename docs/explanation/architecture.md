@@ -1,7 +1,7 @@
 # 현재 아키텍처
 
 riir-airflow의 Python CLI는 기본 ASGI 서버와 선택형 Axum 서버를 제공합니다.
-두 방식 모두 PyO3를 통해 Rust 코드를 사용합니다. ASGI 방식에서 Apache Airflow는
+두 방식 모두 PyO3를 통해 Rust 코드를 사용합니다. 호환 ASGI 앱에서 Apache Airflow는
 별도의 웹 애플리케이션으로 마운트되며 DAG, 메타데이터, 인증, UI와 Airflow API를 관리합니다.
 
 ```text
@@ -9,7 +9,9 @@ riir-airflow serve → Uvicorn → riir_airflow.asgi:app (Starlette)
                               ├─ /health, /show → PyO3 → Rust
                               ├─ /openapi.json, /docs, /redoc → riir API 문서
                               └─ /airflow/* → Airflow 앱의 라우터 (마운트된 경우)
-riir-airflow serve --native → PyO3 → Axum → /health, /show
+riir-airflow serve --native → PyO3 → Axum
+                                    ├─ /health, /show → Rust
+                                    └─ 미매칭 HTTP 경로 → PyO3 → 같은 호환 ASGI 앱
 ```
 
 ## CLI에서 서버 시작까지
@@ -55,15 +57,29 @@ Uvicorn은 요청을 ASGI로 전달하고 Python의 Starlette가 경로와 메�
 Axum은 루프백 주소에서 HTTP/1 요청을 받아 `/health`, `/show`와 오류 응답을
 직접 처리합니다. 네이티브 요청에는 애플리케이션 상태가 없으므로 `/show`는
 Rust에서 빈 딕셔너리의 표현인 `{}`를 `out`에 담습니다.
-Airflow 마운트, API 문서, 자동 리로드는 ASGI 방식에서 제공됩니다.
+Axum 라우터에 일치하지 않은 HTTP 경로만 호환 앱으로 전달합니다. Rust 라우트의
+메서드 불일치(405), 핸들러 오류(404 포함), 슬래시 리디렉션은 Rust 응답으로 끝납니다.
+호환 앱까지 경로를 찾지 못하면 호환 앱의 404를 반환합니다. 기본 wheel만 설치하면
+미매칭 요청에 Rust JSON 404를 반환합니다.
+
+`compat`를 설치한 Axum 서버는 같은 프로세스의 장수명 Python asyncio 루프에서
+호환 앱을 실행합니다. Axum이 단일 HTTP 리스너를 소유합니다. 이 경로는 HTTP/1의
+요청·응답 스트리밍과 연결 종료를 처리합니다. WebSocket, HTTP/2, 자동 리로드는
+네이티브 경로의 지원 범위 밖입니다. 종료 시 Axum은 진행 중인 요청을 마친 뒤
+ASGI 앱의 lifespan을 종료합니다.
+
+Airflow API를 단계적으로 이전하려면 호환 응답을 차분 테스트에 고정한 뒤
+Axum에 해당 경로와 메서드를 등록합니다. 새 Rust 라우트가 먼저 실행되므로
+기존 인증, 상태 코드, 헤더 및 본문을 비교하세요. 같은 경로의 다른 메서드도
+확인하세요. Rust 경로가 일치하면 메서드 불일치 응답도 Axum에서 결정됩니다.
 
 ## Airflow 초기화와 하위 라우팅
 
-`riir_airflow.asgi`를 가져올 때 Rust의 `airflow_mount_path`가 마운트 경로를
-결정합니다. `dev`이면 마운트를 생략하고 그 외 값이면 `/airflow`를 반환합니다.
+호환 앱을 만들 때 Rust의 `airflow_mount_path`가 마운트 경로를 결정합니다.
+CLI의 `dev` 모드는 마운트를 생략하고 `prod` 모드는 `/airflow`를 사용합니다.
 이 초기화 경로에서는 `AIRFLOW_HOME/standalone_admin_password.txt`의 존재를 확인합니다.
-파일이 없으면 Airflow의 DB 초기화와 FAB 관리자 생성 루틴을 호출한 뒤 `cached_app()`으로
-Airflow 앱을 얻습니다.
+파일이 없으면 Airflow DB를 초기화합니다. FAB 인증 관리자를 쓰는 환경에서는
+FAB 관리자도 생성합니다. 이후 `cached_app()`으로 Airflow 앱을 얻습니다.
 
 Airflow 3의 FastAPI 앱은 Starlette 기반이므로 그대로 마운트합니다. 초기화 코드에는
 이전 Airflow의 Flask 앱을 불러오는 경로도 있으며, 이 WSGI 앱은
@@ -78,3 +94,15 @@ Airflow는 자체 UI와 API, 그리고 `/execution` 하위 앱의 라우팅을 �
 이 서버 시작 경로는 Airflow 웹 앱을 초기화합니다. 스케줄러 프로세스는 따로 시작해야 하며,
 저장소의 개발 설정에 지정된 Python `AsgiExecutor`는 Airflow가 선택할 수 있는
 실행기입니다. 태스크 명령을 큐에 담고 처리할 때 서브프로세스로 순차 실행합니다.
+
+## 실제 Airflow HTTP 차분 검증
+
+`mise run test-differential`은 개발 의존성으로 고정한 Airflow 3.4.0을 임시
+`AIRFLOW_HOME`과 SQLite에서 실행합니다. Uvicorn과 Axum 각각에서
+SimpleAuthManager 로그인으로 받은 JWT를 그대로 사용합니다. DAG API와 인증 실패,
+Swagger 문서의 마운트 접두사, URL 인코딩된 쿼리, 리디렉션과 404를 비교합니다.
+JSON은 디코딩해 비교하고 나머지 본문은 바이트로 비교합니다. 서버 이름, Date와
+연결·전송 프레이밍 헤더는 리스너마다 달라 제외합니다. 로그인 JWT와 그 응답의
+Content-Length는 발급 시각에 따라 달라 제외합니다. 선택한 응답 헤더는
+같은 이름의 모든 값을 순서대로 보존합니다. 별도의 브리지 테스트가 두 개의
+Set-Cookie를 보내는 앱으로 중복 헤더를 검증합니다.

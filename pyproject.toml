@@ -41,8 +41,8 @@ dev = [
 select = ["E4", "E7", "E9", "F", "B", "I"]
 
 [tool.pytest.ini_options]
-# 차분 테스트는 DAG 실행과 직렬화가 무거워 기본 pytest에서는 제외한다.
+# 차분 테스트는 DAG 워크로드와 Airflow 서버를 실행하므로 기본 pytest에서 제외한다.
 addopts = "-m 'not differential'"
 markers = [
-    "differential: apache-airflow와 riir-airflow를 같은 DAG로 비교 (mise run test-differential)",
+    "differential: Apache Airflow와 riir-airflow의 DAG 실행, 직렬화 및 HTTP 응답 비교 (mise run test-differential)",
 ]

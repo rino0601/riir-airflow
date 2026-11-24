@@ -24,7 +24,12 @@ Install `riir-airflow` and run `riir-airflow serve --native` for the Axum
 listener. It serves `/health` and `/show` on loopback. The default wheel has
 zero Python runtime dependencies.
 
-Install `riir-airflow[compat]` and run `riir-airflow serve` for the default
-Uvicorn/ASGI server with the existing Airflow integrations. Dev mode reloads
-the ASGI app, and prod mode mounts Airflow at `/airflow` in an initialized
-Airflow environment. Both servers accept `serve --port PORT`.
+Install `riir-airflow[compat]` to enable the default Uvicorn server or to let
+Axum delegate unmatched HTTP paths to the same compatibility app. Axum
+keeps one HTTP/1 listener and runs the Python app in the same process.
+The compatibility app serves riir API docs in both modes and mounts
+Airflow UI, API, and authentication at `/airflow` in prod. Uvicorn reloads
+the app in dev. Both servers accept `serve --port PORT`. WebSockets and
+HTTP/2 are outside native fallback support.
+
+[Architecture and fallback routing](./docs/explanation/architecture.md)

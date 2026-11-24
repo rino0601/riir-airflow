@@ -8,10 +8,12 @@ import socket
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from riir_airflow import _lowlevel
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="Uses Unix process signals")
 STARTUP_TIMEOUT = 60
@@ -28,27 +30,39 @@ def free_port():
         return listener.getsockname()[1]
 
 
-def request(port, method, path):
+def http_request(port, method, path, *, headers=None, body=None):
     connection = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
     try:
         # Both listeners see the same authority when building redirect locations.
-        connection.request(method, path, headers={"Host": "test.example:8080"})
+        connection.request(
+            method, path, body, {"Host": "test.example:8080", **(headers or {})}
+        )
         response = connection.getresponse()
-        headers = {
-            name.lower(): value
-            for name, value in response.getheaders()
-            if name.lower() in {"content-type", "content-length", "allow", "location"}
-        }
-        return response.status, headers, response.read()
+        return response.status, response.getheaders(), response.read()
     finally:
         connection.close()
 
 
+def request(port, method, path):
+    status, headers, body = http_request(port, method, path)
+    return (
+        status,
+        {
+            name.lower(): value
+            for name, value in headers
+            if name.lower() in {"content-type", "content-length", "allow", "location"}
+        },
+        body,
+    )
+
+
 @contextmanager
-def server(directory, port, *args, env=None, mode="dev"):
+def server(directory, port, *args, env=None, mode="dev", launcher=None):
+    executable, *arguments = cli(port, *args, mode=mode)
+    command = [*(launcher or [executable]), *arguments]
     with (directory / f"serve-{port}.log").open("w+") as log:
         process = subprocess.Popen(
-            cli(port, *args, mode=mode),
+            command,
             cwd=directory,
             stdout=log,
             stderr=log,
@@ -243,7 +257,7 @@ def cached_app():
             Path("request-in-flight").touch()
             while not Path("finish-request").exists():
                 await asyncio.sleep(0.01)
-        return JSONResponse(
+        response = JSONResponse(
             {
                 "root_path": request.scope["root_path"],
                 "ready": request.state.ready,
@@ -254,6 +268,9 @@ def cached_app():
             },
             status_code=201,
         )
+        response.set_cookie("first", "one")
+        response.set_cookie("second", "two")
+        return response
 
     return app
 
@@ -292,6 +309,14 @@ def test_native_prod_uses_mounted_app(tmp_path, fake_airflow, shutdown_signal):
             (tmp_path / "finish-request").touch()
             response = connection.getresponse()
             assert response.status == 201
+            assert [
+                value
+                for name, value in response.getheaders()
+                if name.lower() == "set-cookie"
+            ] == [
+                "first=one; Path=/; SameSite=lax",
+                "second=two; Path=/; SameSite=lax",
+            ]
             assert json.loads(response.read()) == {
                 "root_path": "/airflow",
                 "ready": True,
@@ -316,30 +341,22 @@ def test_native_dev_uses_cli_mode(tmp_path, fake_airflow):
         assert not (tmp_path / "factory-called").exists()
 
 
-def test_native_without_compat_retains_404(tmp_path):
-    (tmp_path / "sitecustomize.py").write_text(
-        """
-import importlib.util
-import sys
-
-find_spec = importlib.util.find_spec
-importlib.util.find_spec = lambda name: None if name == "airflow" else find_spec(name)
-
-
-class RejectCompat:
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".")[0] in {"airflow", "a2wsgi", "starlette"}:
-            raise AssertionError(f"Unexpected compat import: {fullname}")
-
-
-sys.meta_path.insert(0, RejectCompat())
-"""
-    )
-    port = free_port()
+@pytest.mark.parametrize("mode", ["dev", "prod"])
+def test_native_without_compat_retains_404(tmp_path, mode):
+    # Run with only the riir package and the standard library on sys.path.
+    # Linking just the package also works when pytest is using a built wheel.
+    package = Path(_lowlevel.__file__).parent
+    (tmp_path / "riir_airflow").symlink_to(package, target_is_directory=True)
     env = {**os.environ, "PYTHONPATH": str(tmp_path)}
-    with server(tmp_path, port, "--native", mode="prod", env=env):
+    launcher = [sys.executable, "-S", "-m", "riir_airflow"]
+    port = free_port()
+    with server(tmp_path, port, "--native", mode=mode, env=env, launcher=launcher):
         assert request(port, "GET", "/health")[0] == 200
-        assert request(port, "GET", "/docs")[2] == b'{"detail":"Not Found"}'
+        assert request(port, "GET", "/docs") == (
+            404,
+            {"content-type": "application/json", "content-length": "22"},
+            b'{"detail":"Not Found"}',
+        )
 
 
 @pytest.mark.parametrize(
@@ -364,3 +381,116 @@ def test_native_surfaces_installed_compat_failure(tmp_path, fake_airflow, flag, 
     assert "Axum listening" not in result.stderr
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", port))
+
+
+@pytest.fixture
+def isolated_airflow(tmp_path):
+    # Airflow config can name a database, config file, plugins, or secrets backend.
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith(("AIRFLOW", "RIIR_"))
+        and key.upper() != "PYTHONPATH"
+    }
+    password_file = tmp_path / "passwords.json"
+    password_file.write_text(json.dumps({"tester": "test-password"}))
+    return {
+        **env,
+        "AIRFLOW_HOME": str(tmp_path),
+        "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": f"sqlite:///{tmp_path / 'airflow.db'}",
+        "AIRFLOW__CORE__LOAD_EXAMPLES": "False",
+        "AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS": "tester:admin",
+        "AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_PASSWORDS_FILE": str(password_file),
+        "AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS": "False",
+        "AIRFLOW__API_AUTH__JWT_SECRET": "local-differential-test-signing-key",
+    }
+
+
+def comparable(response):
+    status, headers, body = response
+    # Exclude server identity, dates, and connection/framing headers.
+    # Retain every selected header value in wire order.
+    selected = {}
+    for name, value in headers:
+        name = name.lower()
+        if name in {
+            "allow",
+            "cache-control",
+            "content-encoding",
+            "content-length",
+            "content-type",
+            "location",
+            "set-cookie",
+            "vary",
+            "www-authenticate",
+        }:
+            selected.setdefault(name, []).append(value)
+    if selected.get("content-type", [""])[0].startswith("application/json"):
+        body = json.loads(body)
+    return status, selected, body
+
+
+def login(port, password):
+    return http_request(
+        port,
+        "POST",
+        "/airflow/auth/token",
+        headers={"Content-Type": "application/json"},
+        body=json.dumps({"username": "tester", "password": password}),
+    )
+
+
+@pytest.mark.differential
+def test_real_airflow_fallback_matches_uvicorn(tmp_path, isolated_airflow):
+    def exercise(port):
+        denied = comparable(login(port, "wrong-password"))
+        status, headers, body = comparable(login(port, "test-password"))
+        assert status == 201
+        token = body.pop("access_token")
+        assert token
+        # Compare the response without the per-login signed JWT or its length.
+        # The requests below use the token as issued by this server.
+        headers.pop("content-length")
+        auth = {"Authorization": f"Bearer {token}"}
+
+        dags = "/airflow/api/v2/dags"
+        cases = [
+            (dags, auth, 200),
+            (dags, {}, 401),
+            (dags + "?limit=not%20an%20integer", auth, 422),
+            ("/airflow/docs", {}, 200),
+            ("/airflow?keep=%2F&keep=%2B", {}, 307),
+            ("/airflow/api/v2/no-such-route", auth, 404),
+        ]
+
+        def fetch(case):
+            path, request_headers, expected_status = case
+            response = comparable(
+                http_request(port, "GET", path, headers=request_headers)
+            )
+            assert response[0] == expected_status, (path, response)
+            return response
+
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(fetch, cases))
+
+        assert denied[0] == 401
+        assert results[0][2] == {"dags": [], "total_entries": 0}
+        assert "not an integer" in str(results[2][2])
+        assert b"/airflow/openapi.json" in results[3][2]
+        assert results[4][1]["location"] == [
+            "http://test.example:8080/airflow/?keep=%2F&keep=%2B"
+        ]
+        return denied, (status, headers, body), results
+
+    uvicorn_port = free_port()
+    with server(tmp_path, uvicorn_port, mode="prod", env=isolated_airflow):
+        uvicorn = exercise(uvicorn_port)
+
+    native_port = free_port()
+    with server(
+        tmp_path, native_port, "--native", mode="prod", env=isolated_airflow
+    ) as process:
+        assert exercise(native_port) == uvicorn
+        process.send_signal(signal.SIGTERM)
+        assert process.wait(timeout=10) == 0

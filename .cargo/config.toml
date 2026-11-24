@@ -1,0 +1,3 @@
+[build]
+# Override with CARGO_BUILD_JOBS or Cargo's --jobs flag.
+jobs = 2

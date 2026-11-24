@@ -1,3 +1,5 @@
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -17,3 +19,14 @@ def test_version_matches_cargo_package_version() -> None:
 
 def test_dunder_version_matches_version() -> None:
     assert __version__ == version()
+
+
+def test_cli_version() -> None:
+    result = subprocess.run(
+        [sys.executable, "-m", "riir_airflow", "--version"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.stdout == f"riir-airflow {version()}\n"
+    assert result.stderr == ""

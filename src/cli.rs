@@ -72,6 +72,7 @@ pub fn settings_mode() -> OsString {
 fn command() -> Command {
     Command::new("riir-airflow")
         .about("riir-airflow CLI: serve/show 하위 명령을 제공한다.")
+        .version(env!("CARGO_PKG_VERSION"))
         .disable_help_subcommand(true)
         .arg(
             Arg::new("mode")
@@ -135,7 +136,10 @@ pub fn parse(args: Vec<OsString>, program: &str) -> Result<Config, CliExit> {
     let mut matches = parser
         .try_get_matches_from_mut(std::iter::once(OsString::from(program)).chain(args))
         .map_err(|error| CliExit {
-            code: if error.kind() == ErrorKind::DisplayHelp {
+            code: if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+            ) {
                 0
             } else {
                 2

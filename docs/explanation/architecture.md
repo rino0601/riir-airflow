@@ -6,11 +6,11 @@ riir-airflow의 Python CLI는 기본 ASGI 서버와 선택형 Axum 서버를 제
 
 ```text
 riir-airflow serve → Uvicorn → riir_airflow.asgi:app (Starlette)
-                              ├─ /health, /show → PyO3 → Rust
+                              ├─ /health → PyO3 → Rust
                               ├─ /openapi.json, /docs, /redoc → riir API 문서
                               └─ /airflow/* → Airflow 앱의 라우터 (마운트된 경우)
 riir-airflow serve --native → PyO3 → Axum
-                                    ├─ /health, /show → Rust
+                                    ├─ /health → Rust
                                     └─ 미매칭 HTTP 경로 → PyO3 → 같은 호환 ASGI 앱
 ```
 
@@ -51,12 +51,9 @@ Uvicorn은 요청을 ASGI로 전달하고 Python의 Starlette가 경로와 메�
 | 경로 | 처리 |
 | --- | --- |
 | `GET /health` | Rust가 JSON 본문 `{"status":"healthy"}`, 상태 코드 200, 미디어 타입을 반환하고 Starlette가 응답을 보냅니다. 이 응답은 Airflow나 DB 상태를 조회하지 않습니다. |
-| `GET /show` | Rust는 비어 있는 기본 딕셔너리를 `{}`로 표시하고, 키와 값이 모두 기본 문자열인 단일 항목은 표현이 80자 이내일 때 형식화합니다. 그 외의 상태는 Python의 `pprint.pformat`으로 처리합니다. Starlette가 `out` 필드가 담긴 응답을 JSON으로 직렬화합니다. |
 | `/openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc` | Python이 패키지에 들어 있는 스키마와 API 문서 HTML을 제공합니다. 스키마와 Swagger UI·ReDoc 페이지는 ASGI의 `root_path`를 반영합니다. |
 
-Axum은 루프백 주소에서 HTTP/1 요청을 받아 `/health`, `/show`와 오류 응답을
-직접 처리합니다. 네이티브 요청에는 애플리케이션 상태가 없으므로 `/show`는
-Rust에서 빈 딕셔너리의 표현인 `{}`를 `out`에 담습니다.
+Axum은 루프백 주소에서 HTTP/1 요청을 받아 `/health`와 오류 응답을 직접 처리합니다.
 Axum 라우터에 일치하지 않은 HTTP 경로만 호환 앱으로 전달합니다. Rust 라우트의
 메서드 불일치(405), 핸들러 오류(404 포함), 슬래시 리디렉션은 Rust 응답으로 끝납니다.
 호환 앱까지 경로를 찾지 못하면 호환 앱의 404를 반환합니다. 기본 wheel만 설치하면

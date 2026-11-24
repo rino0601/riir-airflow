@@ -90,7 +90,7 @@ fn command() -> Command {
                         .long("native")
                         .action(ArgAction::SetTrue)
                         .overrides_with("no-native")
-                        .help("Serve /health and /show directly with Axum"),
+                        .help("Serve /health directly with Axum"),
                 )
                 .arg(
                     Arg::new("no-native")

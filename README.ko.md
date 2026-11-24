@@ -7,7 +7,7 @@ apache-airflow 를 Rust 로 재작성하여, airflow 운영을 단순화 합니�
 ## HTTP 서버 실행
 
 기본 패키지에서 `riir-airflow serve --native`를 실행하면 Axum이 루프백에서
-`/health`와 `/show`를 처리합니다. `riir-airflow[compat]`를 설치하면
+`/health`를 처리합니다. `riir-airflow[compat]`를 설치하면
 Axum에 일치하지 않는 HTTP 경로는 같은 프로세스의 호환 ASGI 앱으로 전달합니다.
 Axum은 단일 HTTP/1 포트를 사용합니다.
 

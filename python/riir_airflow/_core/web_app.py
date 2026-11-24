@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from riir_airflow._lowlevel import health_response, show_state
+from riir_airflow._lowlevel import health_response
 from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
@@ -18,10 +18,6 @@ _OAUTH_REDIRECT = (_DOCS / "oauth2-redirect.html").read_text(encoding="utf-8")
 async def h(request: Request) -> Response:
     body, status_code, media_type = health_response()
     return Response(body, status_code=status_code, media_type=media_type)
-
-
-async def show(request: Request) -> JSONResponse:
-    return JSONResponse(show_state(request.state._state))
 
 
 async def openapi(request: Request) -> JSONResponse:
@@ -57,10 +53,8 @@ async def http_error(request: Request, exc: HTTPException) -> Response:
 
 def create_web_app() -> Starlette:
     health_route = Route("/health", h, methods=["GET"])
-    show_route = Route("/show", show, methods=["GET"])
-    # Starlette automatically adds HEAD to GET routes. These two were GET-only.
+    # Starlette automatically adds HEAD to GET routes. Keep /health GET-only.
     health_route.methods.remove("HEAD")
-    show_route.methods.remove("HEAD")
 
     return Starlette(
         routes=[
@@ -69,7 +63,6 @@ def create_web_app() -> Starlette:
             Route("/docs/oauth2-redirect", swagger_ui_redirect),
             Route("/redoc", redoc_html),
             health_route,
-            show_route,
         ],
         exception_handlers={HTTPException: http_error},
     )

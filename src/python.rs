@@ -1,14 +1,11 @@
 use std::ffi::OsString;
 
+use crate::HEALTH_BODY;
 use crate::cli::{self, ServeMode, Subcommand};
 use crate::native::serve;
-use crate::{EMPTY_SHOW_STATE, HEALTH_BODY};
 
 use pyo3::prelude::*;
-use pyo3::sync::critical_section::with_critical_section;
-use pyo3::types::{PyBool, PyBoolMethods, PyBytes, PyDict, PyInt, PyString};
-
-const PPRINT_WIDTH: usize = 80;
+use pyo3::types::{PyBytes, PyDict, PyString};
 
 /// Prints a message.
 #[pyfunction]
@@ -71,111 +68,6 @@ fn health_response(py: Python<'_>) -> (Bound<'_, PyBytes>, u16, &'static str) {
     )
 }
 
-/// Build the response for the ASGI request-state endpoint.
-#[pyfunction]
-fn show_state<'py>(state: &Bound<'py, PyAny>) -> PyResult<Bound<'py, PyDict>> {
-    let py = state.py();
-    let response = PyDict::new(py);
-    // Dict subclasses may override repr even when they are empty.
-    if state
-        .cast_exact::<PyDict>()
-        .is_ok_and(|dict| dict.is_empty())
-    {
-        response.set_item("out", EMPTY_SHOW_STATE)?;
-    } else if let Some(formatted) = format_single_entry(state).or_else(|| format_two_entries(state))
-    {
-        response.set_item("out", formatted)?;
-    } else {
-        let formatted = py.import("pprint")?.call_method1("pformat", (state,))?;
-        response.set_item("out", formatted)?;
-    }
-    Ok(response)
-}
-
-fn format_single_entry(state: &Bound<'_, PyAny>) -> Option<String> {
-    let dict = state.cast_exact::<PyDict>().ok()?;
-    let (key, value) = with_critical_section(state, || {
-        if dict.len() == 1 {
-            dict.iter().next()
-        } else {
-            None
-        }
-    })?;
-    let key = repr_exact_string(&key)?;
-    let key = key.to_str().ok()?;
-    let integer_repr;
-    let value_repr;
-    let value = if let Some(value) = repr_bool_or_none(&value) {
-        value
-    } else if let Ok(value) = value.cast_exact::<PyInt>() {
-        integer_repr = value.extract::<i64>().ok()?.to_string();
-        &integer_repr
-    } else {
-        value_repr = repr_exact_string(&value)?;
-        value_repr.to_str().ok()?
-    };
-    // A singleton needs no key comparisons. pprint counts Unicode code points
-    // and dispatches to its multiline formatter above the default width of 80.
-    (key.chars().count() + value.chars().count() + 4 <= PPRINT_WIDTH)
-        .then(|| format!("{{{key}: {value}}}"))
-}
-
-fn repr_exact_string<'py>(value: &Bound<'py, PyAny>) -> Option<Bound<'py, PyString>> {
-    value.cast_exact::<PyString>().ok()?.repr().ok()
-}
-
-fn repr_bool_or_none(value: &Bound<'_, PyAny>) -> Option<&'static str> {
-    if value.is_none() {
-        Some("None")
-    } else {
-        let value = value.cast_exact::<PyBool>().ok()?;
-        Some(if value.is_true() { "True" } else { "False" })
-    }
-}
-
-fn format_two_entries(state: &Bound<'_, PyAny>) -> Option<String> {
-    let dict = state.cast_exact::<PyDict>().ok()?;
-    let ((first_key, first_value), (second_key, second_value)) =
-        with_critical_section(state, || {
-            if dict.len() != 2 {
-                return None;
-            }
-            let mut entries = dict.iter();
-            Some((entries.next()?, entries.next()?))
-        })?;
-    let first_key = first_key.cast_exact::<PyString>().ok()?;
-    let second_key = second_key.cast_exact::<PyString>().ok()?;
-    let first_repr = repr_exact_string(&first_value);
-    let second_repr = repr_exact_string(&second_value);
-    let (first_value, second_value) = match (&first_repr, &second_repr) {
-        (Some(first), Some(second)) => (first.to_str().ok()?, second.to_str().ok()?),
-        (Some(first), None) => (first.to_str().ok()?, repr_bool_or_none(&second_value)?),
-        (None, Some(second)) => (repr_bool_or_none(&first_value)?, second.to_str().ok()?),
-        (None, None) => return None,
-    };
-
-    // Compare the original Python strings so escape sequences and lone
-    // surrogates sort the same way as pprint's exact string keys.
-    let (first_key, first_value, second_key, second_value) =
-        if second_key.as_any().lt(first_key).ok()? {
-            (second_key, second_value, first_key, first_value)
-        } else {
-            (first_key, first_value, second_key, second_value)
-        };
-    let first_key = first_key.repr().ok()?;
-    let second_key = second_key.repr().ok()?;
-    let parts = [
-        first_key.to_str().ok()?,
-        first_value,
-        second_key.to_str().ok()?,
-        second_value,
-    ];
-    let width = parts.iter().map(|part| part.chars().count()).sum::<usize>() + 8;
-    let [first_key, first_value, second_key, second_value] = parts;
-    (width <= PPRINT_WIDTH)
-        .then(|| format!("{{{first_key}: {first_value}, {second_key}: {second_value}}}"))
-}
-
 type ParsedCli = (OsString, &'static str, bool, Option<u16>);
 type CliDiagnostic = (u8, String);
 
@@ -220,7 +112,6 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(serve_options, m)?)?;
     m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
-    m.add_function(wrap_pyfunction!(show_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_cli, m)?)?;
     m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;

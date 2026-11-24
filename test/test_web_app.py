@@ -1,5 +1,8 @@
+import json
+import pprint
 import sys
 from pprint import pformat
+from unittest.mock import Mock
 
 import pytest
 from riir_airflow.asgi import app
@@ -23,6 +26,45 @@ def test_read_main(client):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/json")
     assert response.json() == {"out": pformat(state)}
+
+
+@pytest.mark.parametrize("state", [{"k": "한" * 71}, {"'": 'a"\n\ud800'}])
+def test_show_single_string_entry_without_pprint(client, monkeypatch, state):
+    expected = {"out": pformat(state)}
+    client.app_state.update(state)
+    monkeypatch.setitem(sys.modules, "pprint", None)
+
+    response = client.get("/show")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/json"
+    assert (
+        response.content
+        == json.dumps(expected, ensure_ascii=False, separators=(",", ":")).encode()
+    )
+
+
+def test_show_uses_pprint_for_wide_or_custom_entries(client, monkeypatch):
+    class CustomString(str):
+        def __repr__(self):
+            return "<custom>"
+
+    formatter = Mock(wraps=pformat)
+    monkeypatch.setattr(pprint, "pformat", formatter)
+    for state in (
+        {"k": "한" * 72},
+        {"k": "한 " * 60},
+        {"k": CustomString("value")},
+        {CustomString("key"): "v"},
+    ):
+        client.app_state.clear()
+        client.app_state.update(state)
+        formatter.reset_mock()
+
+        response = client.get("/show")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/json"
+        assert response.json() == {"out": pformat(state)}
+        formatter.assert_called_once_with(state)
 
 
 def test_show_propagates_repr_errors(client):

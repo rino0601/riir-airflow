@@ -4,6 +4,20 @@ apache-airflow 를 Rust 로 재작성하여, airflow 운영을 단순화 합니�
 
 하위 호환을 포기하면, 할 수 있는 선택이 있지 않을까? 라는 생각에서 시작한 실험 프로젝트 입니다.
 
+## HTTP 서버 실행
+
+기본 패키지에서 `riir-airflow serve --native`를 실행하면 Axum이 루프백에서
+`/health`와 `/show`를 처리합니다. `riir-airflow[compat]`를 설치하면
+Axum에 일치하지 않는 HTTP 경로는 같은 프로세스의 호환 ASGI 앱으로 전달합니다.
+Axum은 단일 HTTP/1 포트를 사용합니다.
+
+기본 `riir-airflow serve`는 Uvicorn을 실행합니다. 두 서버 모두 호환 앱에서
+riir API 문서를 제공하고 `prod` 모드에서 Airflow UI·API·인증을
+`/airflow`에 마운트합니다. 자동 리로드는 Uvicorn의 `dev` 모드에서 제공됩니다.
+두 서버의 포트는 `serve --port PORT`로 지정할 수 있습니다.
+
+[아키텍처와 fallback 라우팅](./docs/explanation/architecture.md)
+
 ## Goal ( 해결하고자 하는 apache-airflow 의 문제점)
 
 repo 를 여는 시점에, 이 프로젝트는 4가지 목표를 가지고 있습니다.

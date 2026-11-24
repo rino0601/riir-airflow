@@ -16,6 +16,10 @@ class LifespanError(RuntimeError):
     """The app reported a lifespan failure or broke the lifespan protocol."""
 
 
+class RequestTimeout(TimeoutError):
+    """An ASGI request exceeded its runtime deadline."""
+
+
 class _Lifespan:
     def __init__(self, app: ASGIApp) -> None:
         self.state: Message = {}
@@ -136,17 +140,26 @@ class ASGIRuntime:
         finally:
             await lifespan.finish()
 
-    def submit(self, scope: Message, receive: Receive, send: Send) -> Future[None]:
+    def submit(
+        self,
+        scope: Message,
+        receive: Receive,
+        send: Send,
+        *,
+        timeout: float | None = None,
+    ) -> Future[None]:
         """Schedule an ASGI call and return immediately."""
         with self._lock:
             if self._closing:
                 raise RuntimeError("ASGI runtime is closed")
             return asyncio.run_coroutine_threadsafe(
-                self._call(scope.copy(), receive, send), self._loop
+                self._call(scope.copy(), receive, send, timeout), self._loop
             )
 
-    async def _call(self, scope: Message, receive: Receive, send: Send) -> None:
-        task = asyncio.create_task(self._invoke(scope, receive, send))
+    async def _call(
+        self, scope: Message, receive: Receive, send: Send, timeout: float | None
+    ) -> None:
+        task = asyncio.create_task(self._invoke(scope, receive, send, timeout))
         self._requests.add(task)
         try:
             # Closing the runtime and cancelling the caller's future may
@@ -160,9 +173,18 @@ class ASGIRuntime:
         finally:
             self._requests.remove(task)
 
-    async def _invoke(self, scope: Message, receive: Receive, send: Send) -> None:
+    async def _invoke(
+        self, scope: Message, receive: Receive, send: Send, timeout: float | None
+    ) -> None:
         scope["state"] = self._lifespan.state.copy()
-        await self._app(scope, receive, send)
+        deadline = asyncio.timeout(timeout)
+        try:
+            async with deadline:
+                await self._app(scope, receive, send)
+        except TimeoutError as error:
+            if deadline.expired():
+                raise RequestTimeout from error
+            raise
 
     def close(self) -> None:
         """Stop accepting calls, shut down the app, and wait for the thread."""

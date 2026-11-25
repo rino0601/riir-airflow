@@ -28,6 +28,7 @@ pub struct Config {
 pub enum Subcommand {
     Show,
     Serve { native: bool, port: Option<u16> },
+    SchedulerStatus { database: OsString },
 }
 
 pub struct CliExit {
@@ -71,7 +72,7 @@ pub fn settings_mode() -> OsString {
 
 fn command() -> Command {
     Command::new("riir-airflow")
-        .about("riir-airflow CLI: serve/show 하위 명령을 제공한다.")
+        .about("riir-airflow CLI")
         .version(env!("CARGO_PKG_VERSION"))
         .disable_help_subcommand(true)
         .arg(
@@ -110,6 +111,17 @@ fn command() -> Command {
                 .args_override_self(true),
         )
         .subcommand(Command::new("show").about("Print the current mode"))
+        .subcommand(
+            Command::new("scheduler-status")
+                .about("Read scheduler state counts from an Airflow SQLite database")
+                .arg(
+                    Arg::new("database")
+                        .long("database")
+                        .value_name("PATH")
+                        .required(true)
+                        .value_parser(OsStringValueParser::new()),
+                ),
+        )
         .args_override_self(true)
 }
 
@@ -157,6 +169,9 @@ pub fn parse(args: Vec<OsString>, program: &str) -> Result<Config, CliExit> {
 
     let command = match matches.remove_subcommand() {
         Some((name, _)) if name == "show" => Subcommand::Show,
+        Some((name, mut args)) if name == "scheduler-status" => Subcommand::SchedulerStatus {
+            database: args.remove_one::<OsString>("database").unwrap(),
+        },
         Some((_, args)) => resolve_serve(args, environment.serve.as_deref())?,
         None => {
             let help = parser.render_help();

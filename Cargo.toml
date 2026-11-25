@@ -19,6 +19,7 @@ tokio = { version = "1", features = ["macros", "net", "rt", "signal", "sync", "t
 clap = "4.5.0"
 pyo3-async-runtimes = { version = "0.30.0", features = ["tokio-runtime"] }
 futures-util = { version = "0.3", default-features = false }
+rusqlite = { version = "0.37", features = ["bundled"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["io-util", "process"] }

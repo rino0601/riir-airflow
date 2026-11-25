@@ -1,12 +1,15 @@
 use std::ffi::OsString;
+use std::path::PathBuf;
 
 use crate::HEALTH_BODY;
 use crate::cli::{self, ServeMode, Subcommand};
 use crate::local_executor::drain_local_commands;
 use crate::native::serve;
+use crate::scheduler;
 
+use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBytes, PyDict, PyString};
+use pyo3::types::{PyBytes, PyDict, PyString, PyTuple};
 
 /// Prints a message.
 #[pyfunction]
@@ -69,22 +72,43 @@ fn health_response(py: Python<'_>) -> (Bound<'_, PyBytes>, u16, &'static str) {
     )
 }
 
-type ParsedCli = (OsString, &'static str, bool, Option<u16>);
 type CliDiagnostic = (u8, String);
 
 /// Parse arguments for the installed CLI.
 #[pyfunction]
-fn parse_cli(args: Vec<OsString>, program: &str) -> (Option<ParsedCli>, Option<CliDiagnostic>) {
+fn parse_cli<'py>(
+    py: Python<'py>,
+    args: Vec<OsString>,
+    program: &str,
+) -> PyResult<(Option<Bound<'py, PyTuple>>, Option<CliDiagnostic>)> {
     match cli::parse(args, program) {
         Ok(config) => {
-            let (command, native, port) = match config.command {
-                Subcommand::Show => ("show", false, None),
-                Subcommand::Serve { native, port } => ("serve", native, port),
+            let mode = config.mode;
+            let parsed = match config.command {
+                Subcommand::Show => (mode, "show", false, Option::<u16>::None).into_pyobject(py)?,
+                Subcommand::Serve { native, port } => {
+                    (mode, "serve", native, port).into_pyobject(py)?
+                }
+                Subcommand::SchedulerStatus { database } => (
+                    mode,
+                    "scheduler-status",
+                    false,
+                    Option::<u16>::None,
+                    database,
+                )
+                    .into_pyobject(py)?,
             };
-            (Some((config.mode, command, native, port)), None)
+            Ok((Some(parsed), None))
         }
-        Err(exit) => (None, Some((exit.code, exit.message))),
+        Err(exit) => Ok((None, Some((exit.code, exit.message)))),
     }
+}
+
+#[pyfunction]
+fn scheduler_status(py: Python<'_>, database: PathBuf) -> PyResult<String> {
+    py.detach(|| scheduler::status(&database))
+        .map(|status| status.to_string())
+        .map_err(|error| PyRuntimeError::new_err(error.to_string()))
 }
 
 #[pyfunction]
@@ -115,6 +139,7 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(airflow_mount_path, m)?)?;
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(parse_cli, m)?)?;
+    m.add_function(wrap_pyfunction!(scheduler_status, m)?)?;
     m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;
     Ok(())

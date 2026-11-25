@@ -4,7 +4,22 @@ from pathlib import Path
 from riir_airflow._lowlevel import parse_cli
 
 
-def _run(mode: str, command: str, native: bool, port: int | None) -> None:
+def _run(
+    mode: str, command: str, native: bool, port: int | None, database: str | None = None
+) -> None:
+    if command == "scheduler-status":
+        from riir_airflow._lowlevel import scheduler_status
+
+        try:
+            print(scheduler_status(database))
+        except RuntimeError as error:
+            print(
+                f"Cannot read scheduler status from {database!r}: {error}",
+                file=sys.stderr,
+            )
+            raise SystemExit(1) from None
+        return
+
     if native:
         from riir_airflow.cli._native import run_native
 

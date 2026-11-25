@@ -12,8 +12,8 @@ use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use tokio::net::TcpListener;
 
+use crate::HEALTH_BODY;
 use crate::asgi_bridge::{AsgiBridge, ConnectionInfo};
-use crate::{EMPTY_SHOW_STATE, HEALTH_BODY};
 
 const ASGI_BODY_LIMIT: usize = 64 * 1024 * 1024;
 
@@ -33,12 +33,6 @@ fn json(status: StatusCode, body: impl Into<String>) -> Response {
 
 async fn health() -> Response {
     json(StatusCode::OK, HEALTH_BODY)
-}
-
-async fn show() -> Response {
-    // Native requests have no application state to format.
-    let body = serde_json::json!({"out": EMPTY_SHOW_STATE}).to_string();
-    json(StatusCode::OK, body)
 }
 
 async fn method_not_allowed() -> Response {
@@ -61,14 +55,13 @@ async fn missing(
     let path = percent_decode_str(uri.path()).decode_utf8_lossy();
     match (request.method(), path.as_ref()) {
         (&Method::GET, "/health") => return health().await,
-        (&Method::GET, "/show") => return show().await,
-        (_, "/health" | "/show") => return method_not_allowed().await,
+        (_, "/health") => return method_not_allowed().await,
         _ => {}
     }
 
     // Match Starlette's trailing-slash redirect, even for methods it rejects.
     let canonical = path.trim_end_matches('/');
-    if matches!(canonical, "/health" | "/show") {
+    if canonical == "/health" {
         let address = state.address.to_string();
         let host = request
             .headers()
@@ -189,10 +182,6 @@ fn router(state: Arc<ServerState>) -> Router {
         .route(
             "/health",
             on(MethodFilter::GET, health).head(method_not_allowed),
-        )
-        .route(
-            "/show",
-            on(MethodFilter::GET, show).head(method_not_allowed),
         )
         .method_not_allowed_fallback(method_not_allowed)
         .fallback(missing)

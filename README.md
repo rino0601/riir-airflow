@@ -21,7 +21,7 @@ Rewrite airflow in rust. it might be help to simplify to operate airflow.
 ## Serve
 
 Install `riir-airflow` and run `riir-airflow serve --native` for the Axum
-listener. It serves `/health` and `/show` on loopback. The default wheel has
+listener. It serves `/health` on loopback. The default wheel has
 zero Python runtime dependencies.
 
 Install `riir-airflow[compat]` to enable the default Uvicorn server or to let

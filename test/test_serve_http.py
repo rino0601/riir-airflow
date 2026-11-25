@@ -146,17 +146,16 @@ _lowlevel.parse_cli = record_native_dispatch
 def test_installed_servers_match_on_shared_http_routes(tmp_path):
     paths = [
         ("GET", "/health", 200),
-        ("GET", "/show", 200),
-        ("GET", "/%73how?ignored=yes", 200),
-        ("GET", "/show?state=%7B%22z%22%3A%22%ED%95%9C%EA%B8%80%22%7D", 200),
-        ("HEAD", "/show", 405),
+        ("GET", "/show", 404),
+        ("GET", "/%73how?ignored=yes", 404),
+        ("HEAD", "/show", 404),
         ("HEAD", "/health", 405),
-        ("POST", "/show", 405),
+        ("POST", "/show", 404),
         ("OPTIONS", "/health", 405),
         ("GET", "/missing", 404),
         ("HEAD", "/missing", 404),
         ("POST", "/health//?keep=%2F", 307),
-        ("POST", "/show//?state=%7B%7D", 307),
+        ("POST", "/show//?keep=%2F", 404),
     ]
     native_port = free_port()
     with server(tmp_path, native_port, "--native"):
@@ -167,9 +166,6 @@ def test_installed_servers_match_on_shared_http_routes(tmp_path):
                 asgi = request(asgi_port, method, path)
                 assert native[0] == status, (method, path, native)
                 assert native == asgi, (method, path, native, asgi)
-                if status == 200 and path.startswith(("/show", "/%73how")):
-                    assert native[1]["content-type"] == "application/json"
-                    assert native[2] == b'{"out":"{}"}'
 
 
 @pytest.mark.parametrize("shutdown_signal", [signal.SIGINT, signal.SIGTERM])
@@ -189,7 +185,7 @@ def test_native_collision_and_shutdown(tmp_path, shutdown_signal):
             assert process.wait(timeout=5) == 0
 
     with server(tmp_path, port, "--native"):
-        assert request(port, "GET", "/show")[2] == b'{"out":"{}"}'
+        assert request(port, "GET", "/health")[0] == 200
 
 
 @pytest.fixture
@@ -206,6 +202,7 @@ from pathlib import Path
 
 from airflow.api_fastapi import app as airflow_api
 from fastapi import FastAPI, Request
+from riir_airflow._core import compat_app
 from starlette.responses import JSONResponse
 
 
@@ -276,6 +273,21 @@ def cached_app():
 
 
 airflow_api.cached_app = cached_app
+
+create_web_app = compat_app.create_web_app
+
+
+def app_with_fallback_marker():
+    app = create_web_app()
+
+    async def missing(request, exc):
+        return JSONResponse({"source": "compat"}, status_code=404)
+
+    app.exception_handlers[404] = missing
+    return app
+
+
+compat_app.create_web_app = app_with_fallback_marker
 """
     )
     return {**os.environ, "PYTHONPATH": str(tmp_path), "AIRFLOW_HOME": str(tmp_path)}
@@ -288,10 +300,10 @@ def test_native_prod_uses_mounted_app(tmp_path, fake_airflow, shutdown_signal):
     with server(tmp_path, port, "--native", mode="prod", env=fake_airflow) as process:
         assert (tmp_path / "started").is_file()
         assert request(port, "GET", "/health")[2] == b'{"status":"healthy"}'
-        assert request(port, "GET", "/%73how")[2] == b'{"out":"{}"}'
         assert request(port, "POST", "/health")[0] == 405
-        assert request(port, "POST", "/%73how")[0] == 405
-        assert request(port, "POST", "/show//?keep=%2F")[0] == 307
+        for method, path in (("GET", "/show"), ("POST", "/%73how"), ("POST", "/show/")):
+            status, _, body = request(port, method, path)
+            assert (status, body) == (404, b'{"source":"compat"}')
         assert request(port, "GET", "/docs")[0] == 200
         assert request(port, "GET", "/airflow/docs")[0] == 200
         status, _, body = request(port, "GET", "/airflow/missing")
@@ -352,11 +364,12 @@ def test_native_without_compat_retains_404(tmp_path, mode):
     port = free_port()
     with server(tmp_path, port, "--native", mode=mode, env=env, launcher=launcher):
         assert request(port, "GET", "/health")[0] == 200
-        assert request(port, "GET", "/docs") == (
-            404,
-            {"content-type": "application/json", "content-length": "22"},
-            b'{"detail":"Not Found"}',
-        )
+        for path in ("/docs", "/show"):
+            assert request(port, "GET", path) == (
+                404,
+                {"content-type": "application/json", "content-length": "22"},
+                b'{"detail":"Not Found"}',
+            )
 
 
 @pytest.mark.parametrize(

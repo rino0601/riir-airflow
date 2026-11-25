@@ -20,22 +20,6 @@
           }
         }
       }
-    },
-    "/show": {
-      "get": {
-        "summary": "Show",
-        "operationId": "show_show_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
     }
   }
 }

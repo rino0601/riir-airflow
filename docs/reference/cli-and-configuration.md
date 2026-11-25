@@ -12,8 +12,10 @@
 | `riir-airflow scheduler-status --database PATH` | Rust SQLite 조회 | 기존 Airflow 3.4 SQLite 메타데이터의 스케줄링 상태별 건수를 JSON으로 출력합니다. |
 
 `scheduler-status`는 단일 호스트의 SQLite 파일 경로를 받아 읽기 전용으로 엽니다.
-한 스냅샷에서 `queued` 및 `running` DAG run과 현재 작업 집합에 속한
-`scheduled`, `queued`, `running`, `up_for_retry` 태스크 인스턴스를 집계합니다.
+한 스냅샷에서 `queued` 및 `running` DAG run과 현재 작업 집합에 속한 미완료 태스크 인스턴스를 집계합니다.
+`task_instances`에는 `scheduled`, `queued`, `running`, `up_for_retry`, `restarting`,
+`up_for_reschedule`, `deferred`, `awaiting_input` 건수가 포함됩니다.
+상태가 SQL `NULL`인 태스크 인스턴스는 `no_state`로 집계합니다. 각 상태에 해당하는 행이 없으면 건수는 `0`입니다.
 
 최상위 `--mode` 옵션이 `show`와 `serve`가 사용하는 모드를 결정하며, 없으면 `RIIR_MODE`(기본값 `dev`)를 사용합니다.
 

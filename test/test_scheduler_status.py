@@ -62,7 +62,14 @@ def test_scheduler_status_reads_committed_airflow_state(tmp_path):
                         ("queued", "queued", 1),
                         ("running", "running", 1),
                         ("retry", "up_for_retry", 1),
+                        ("restart", "restarting", 1),
+                        ("sensor", "up_for_reschedule", 1),
+                        ("trigger", "deferred", 1),
+                        ("human_input", "awaiting_input", 1),
+                        ("no_state", None, 1),
                         ("archived", "running", 0),
+                        ("archived_deferred", "deferred", None),
+                        ("archived_no_state", None, None),
                         ("done", "success", 1),
                     ]
                 ],
@@ -80,6 +87,11 @@ def test_scheduler_status_reads_committed_airflow_state(tmp_path):
                 "queued": 1,
                 "running": 1,
                 "up_for_retry": 1,
+                "restarting": 1,
+                "up_for_reschedule": 1,
+                "deferred": 1,
+                "awaiting_input": 1,
+                "no_state": 1,
             },
         }
         with db:
@@ -88,9 +100,14 @@ def test_scheduler_status_reads_committed_airflow_state(tmp_path):
                 """UPDATE task_instance SET state = 'queued', try_number = 2
                    WHERE task_id = 'retry'"""
             )
+            db.execute(
+                "UPDATE task_instance SET state = 'scheduled' WHERE task_id = 'trigger'"
+            )
             assert read_status() == expected
         expected["dag_runs"] = {"queued": 0, "running": 2}
-        expected["task_instances"].update(queued=2, up_for_retry=0)
+        expected["task_instances"].update(
+            scheduled=2, queued=2, up_for_retry=0, deferred=0
+        )
         assert read_status() == expected
 
 

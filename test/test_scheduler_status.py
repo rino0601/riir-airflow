@@ -6,8 +6,10 @@ import sys
 from contextlib import closing
 from uuid import uuid4
 
+import pytest
 
-def _status(database):
+
+def _status(database, *, cwd=None):
     return subprocess.run(
         [
             sys.executable,
@@ -17,6 +19,7 @@ def _status(database):
             "--database",
             str(database),
         ],
+        cwd=cwd,
         capture_output=True,
         text=True,
         timeout=30,
@@ -118,3 +121,18 @@ def test_scheduler_status_does_not_create_missing_database(tmp_path):
     assert result.stdout == ""
     assert "Cannot read scheduler status" in result.stderr
     assert not database.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="requires ':' in a filename")
+def test_scheduler_status_reads_literal_relative_filename(tmp_path):
+    filename = "file:metadata.db"
+    for path in (tmp_path / filename, tmp_path / "metadata.db"):
+        with closing(sqlite3.connect(path)) as db, db:
+            db.execute("CREATE TABLE dag_run (state)")
+            db.execute("CREATE TABLE task_instance (state, working_set)")
+            if path.name == filename:
+                db.execute("INSERT INTO dag_run VALUES ('queued')")
+
+    result = _status(filename, cwd=tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["dag_runs"] == {"queued": 1, "running": 0}

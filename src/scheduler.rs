@@ -4,7 +4,9 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json::{Value, json};
 
 pub fn status(database: &Path) -> rusqlite::Result<Value> {
-    let connection = Connection::open_with_flags(database, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    // Prefix relative paths so SQLite treats names like `file:metadata.db` literally.
+    let path = Path::new(".").join(database);
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     // One SQLite statement sees a consistent snapshot of both tables.
     connection.query_row(
         "SELECT

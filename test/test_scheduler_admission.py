@@ -1,4 +1,4 @@
-"""Airflow 3.4 SQLite reference for admitting an existing queued DAG run."""
+"""Compare native SQLite DAG run admission with the Airflow 3.4 baseline."""
 
 import os
 import subprocess
@@ -25,6 +25,7 @@ with DAG("admission_probe", schedule=None, max_active_runs=1) as dag:
 
 _SCHEDULER_PROBE = """\
 import sqlite3
+import sys
 from contextlib import closing
 from datetime import timedelta
 
@@ -32,11 +33,31 @@ from airflow.api.common.trigger_dag import trigger_dag
 from airflow.executors.workloads import WorkloadType
 from airflow.jobs.job import Job
 from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.dagrun import DagRun
 from airflow.sdk import timezone
 from airflow.utils.session import create_session
-from airflow.utils.types import DagRunTriggeredByType
+from airflow.utils.types import DagRunTriggeredByType, DagRunType
+from sqlalchemy import update
 
-now = timezone.utcnow()
+from riir_airflow import _lowlevel
+
+mode = sys.argv[1]
+native_decisions = []
+native_admission = _lowlevel.DagRunAdmission
+
+class ObservedAdmission:
+    def __init__(self, running):
+        self.budget = native_admission(running)
+
+    def admit(self, dag_id, limit):
+        admitted = self.budget.admit(dag_id, limit)
+        native_decisions.append((dag_id, limit, admitted))
+        return admitted
+
+_lowlevel.DagRunAdmission = ObservedAdmission
+
+# SQLite compares run_after against a clock with whole-second precision.
+now = timezone.utcnow() - timedelta(minutes=1)
 # Insert the newer run first so row insertion order cannot satisfy the test.
 for run_id, run_after in [("newer", now), ("older", now - timedelta(minutes=1))]:
     trigger_dag(
@@ -45,6 +66,10 @@ for run_id, run_after in [("newer", now), ("older", now - timedelta(minutes=1))]
         run_after=run_after,
         triggered_by=DagRunTriggeredByType.CLI,
     )
+
+if mode == "fallback":
+    with create_session() as session:
+        session.execute(update(DagRun).where(DagRun.run_id == "older").values(run_type=DagRunType.SCHEDULED))
 
 def runs(database):
     return database.execute(
@@ -80,11 +105,16 @@ with closing(sqlite3.connect("airflow.db")) as database:
         assert runner._do_scheduling(session) == 0
 
     assert runs(database) == admitted
+    assert native_decisions == (
+        [("admission_probe", 1, True), ("admission_probe", 1, False)]
+        if mode == "native" else []
+    ), native_decisions
     assert [workload.ti.run_id for workload in queue.values()] == ["older"]
 """
 
 
-def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path):
+@pytest.mark.parametrize("mode", ["baseline", "native", "fallback"])
+def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path, mode: str):
     assert airflow.__version__ == BASELINE_AIRFLOW_VERSION
     dags = tmp_path / "dags"
     dags.mkdir()
@@ -99,14 +129,18 @@ def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path):
         AIRFLOW__CORE__DAGS_FOLDER=str(dags),
         AIRFLOW__CORE__LOAD_EXAMPLES="False",
         AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION="False",
-        AIRFLOW__CORE__EXECUTOR="LocalExecutor",
+        AIRFLOW__CORE__EXECUTOR=(
+            "LocalExecutor"
+            if mode == "baseline"
+            else "riir_airflow.executors.asgi_executor.AsgiExecutor"
+        ),
         AIRFLOW__API_AUTH__JWT_SECRET="admission-probe-test-secret-" * 3,
         AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=f"sqlite:///{tmp_path / 'airflow.db'}",
     )
     for args in (
         ("-m", "airflow", "db", "migrate"),
         ("-m", "airflow", "dag-processor", "--num-runs", "1"),
-        ("-c", _SCHEDULER_PROBE),
+        ("-c", _SCHEDULER_PROBE, mode),
     ):
         result = subprocess.run(
             [sys.executable, *args],

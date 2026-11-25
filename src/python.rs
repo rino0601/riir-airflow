@@ -140,6 +140,7 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(parse_cli, m)?)?;
     m.add_function(wrap_pyfunction!(scheduler_status, m)?)?;
+    m.add_class::<scheduler::DagRunAdmission>()?;
     m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;
     Ok(())

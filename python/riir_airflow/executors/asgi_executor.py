@@ -1,9 +1,10 @@
 import asyncio
-from asyncio.subprocess import Process
 from typing import TYPE_CHECKING, Any
 
 from airflow.executors.local_executor import LocalExecutor
 from airflow.executors.workloads import WorkloadType
+
+from riir_airflow._lowlevel import drain_local_commands
 
 if TYPE_CHECKING:
     from airflow.models.taskinstancekey import TaskInstanceKey
@@ -35,25 +36,18 @@ class AsgiExecutor(LocalExecutor):
         self.commands_to_run.append((key, coro))
 
     async def synca(self) -> None:
-        for key, coro in self.commands_to_run:
+        # Await both subprocess phases in the caller's asyncio task.
+        commands = drain_local_commands(self)
+        for key, coro in commands:
             await asyncio.sleep(0)
             self.log.info("Executing command(coro): %s", coro)
             try:
-                proc: Process = await coro
+                proc = await coro
                 returncode = await proc.wait()
-            except Exception as e:
-                self.fail(key)
-                self.log.error("Failed to execute task %s: %s", key, e)
-                continue
-
-            self.log.info("Task %s exited with return code %s", key, returncode)
-            if returncode == 0:
-                self.success(key)
+            except Exception as error:
+                commands.execution_failed(key, error)
             else:
-                self.fail(key)
-                self.log.error("Task %s failed with return code %s", key, returncode)
-
-        self.commands_to_run = []
+                commands.command_exited(key, returncode)
 
     async def aheartbeat(self) -> None:
         self.heartbeat()

@@ -104,6 +104,7 @@ impl AsgiBridge {
         connection: ConnectionInfo,
     ) -> Result<Response, BridgeError> {
         let (parts, body) = request.into_parts();
+        let is_head = parts.method == axum::http::Method::HEAD;
         let version = match parts.version {
             Version::HTTP_10 => "1.0",
             Version::HTTP_11 => "1.1",
@@ -183,7 +184,12 @@ impl AsgiBridge {
         let head = head_rx.await.map_err(|_| BridgeError::CompletionLost)??;
         let body = if head.suppress_body || head.length == Some(0) {
             guard.finish();
-            Body::empty()
+            if is_head && head.length.is_none() {
+                // Axum infers Content-Length from the size hint before stripping a HEAD body.
+                Body::from_stream(futures_util::stream::empty::<Result<Bytes, BridgeError>>())
+            } else {
+                Body::empty()
+            }
         } else {
             Body::from_stream(futures_util::stream::unfold(
                 ResponseStream {

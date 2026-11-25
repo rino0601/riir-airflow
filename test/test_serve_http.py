@@ -203,7 +203,7 @@ from pathlib import Path
 from airflow.api_fastapi import app as airflow_api
 from fastapi import FastAPI, Request
 from riir_airflow._core import compat_app
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, StreamingResponse
 
 
 def listener_ports():
@@ -246,6 +246,10 @@ def cached_app():
     @app.exception_handler(404)
     async def missing(request, exc):
         return JSONResponse({"source": "airflow"}, status_code=404)
+
+    @app.head("/stream")
+    async def stream():
+        return StreamingResponse(iter([b"hello"]), media_type="application/octet-stream")
 
     @app.post("/probe")
     async def probe(request: Request):
@@ -342,6 +346,16 @@ def test_native_prod_uses_mounted_app(tmp_path, fake_airflow, shutdown_signal):
 
         assert process.wait(timeout=10) == 0
         assert (tmp_path / "stopped").is_file()
+
+
+def test_native_delegated_head_preserves_unknown_content_length(tmp_path, fake_airflow):
+    port = free_port()
+    with server(tmp_path, port, "--native", mode="prod", env=fake_airflow):
+        assert request(port, "HEAD", "/airflow/stream") == (
+            200,
+            {"content-type": "application/octet-stream"},
+            b"",
+        )
 
 
 def test_native_dev_uses_cli_mode(tmp_path, fake_airflow):

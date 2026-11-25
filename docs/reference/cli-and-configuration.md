@@ -4,11 +4,16 @@
 
 | 이름 | 엔트리 포인트 | 설명 |
 | --- | --- | --- |
-| `riir-airflow` | `riir_airflow.__main__:cli_app` | 최상위 CLI. `serve`, `show` 하위 명령을 제공합니다. |
+| `riir-airflow` | `riir_airflow.__main__:cli_app` | 최상위 CLI입니다. |
 | `riir-airflow --version` | Rust CLI 파서 | 설치된 버전을 출력합니다. 기본 패키지만 설치하면 됩니다. |
 | `riir-airflow show` | `riir_airflow.cli.show:Show` | 현재 `RIIR_MODE` 값을 출력합니다. |
 | `riir-airflow serve` | `riir_airflow.cli.serve:Serve` | `dev` 모드에서는 8080 포트, `prod` 모드에서는 80 포트로 ASGI 앱을 실행합니다. `riir-airflow[compat]` 설치가 필요합니다. |
 | `riir-airflow serve --native` | Rust Axum 서버 | `127.0.0.1`에서 `/health`를 제공합니다. 기본 패키지만 설치하면 됩니다. |
+| `riir-airflow scheduler-status --database PATH` | Rust SQLite 조회 | 기존 Airflow 3.4 SQLite 메타데이터의 스케줄링 상태별 건수를 JSON으로 출력합니다. |
+
+`scheduler-status`는 단일 호스트의 SQLite 파일 경로를 받아 읽기 전용으로 엽니다.
+한 스냅샷에서 `queued` 및 `running` DAG run과 현재 작업 집합에 속한
+`scheduled`, `queued`, `running`, `up_for_retry` 태스크 인스턴스를 집계합니다.
 
 최상위 `--mode` 옵션이 `show`와 `serve`가 사용하는 모드를 결정하며, 없으면 `RIIR_MODE`(기본값 `dev`)를 사용합니다.
 

@@ -2,6 +2,7 @@ use std::ffi::OsString;
 
 use crate::HEALTH_BODY;
 use crate::cli::{self, ServeMode, Subcommand};
+use crate::local_executor::drain_local_commands;
 use crate::native::serve;
 
 use pyo3::prelude::*;
@@ -107,6 +108,7 @@ fn serve_native(py: Python<'_>, mode: &Bound<'_, PyString>, port: Option<u16>) -
 #[pymodule]
 fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(hello, m)?)?;
+    m.add_function(wrap_pyfunction!(drain_local_commands, m)?)?;
     m.add_function(wrap_pyfunction!(version, m)?)?;
     m.add_function(wrap_pyfunction!(format_show_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_options, m)?)?;

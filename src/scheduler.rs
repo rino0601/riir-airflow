@@ -1,4 +1,7 @@
+use std::collections::HashMap;
 use std::path::Path;
+
+use pyo3::prelude::*;
 
 use rusqlite::{Connection, OpenFlags};
 use serde_json::{Value, json};
@@ -42,4 +45,28 @@ pub fn status(database: &Path) -> rusqlite::Result<Value> {
             }))
         },
     )
+}
+
+/// Track the occupied slots in one ordered scheduler admission batch.
+#[pyclass(module = "riir_airflow._lowlevel")]
+pub(crate) struct DagRunAdmission {
+    running: HashMap<String, i64>,
+}
+
+#[pymethods]
+impl DagRunAdmission {
+    #[new]
+    fn new(running: HashMap<String, i64>) -> Self {
+        Self { running }
+    }
+
+    fn admit(&mut self, dag_id: &str, max_active_runs: Option<i64>) -> bool {
+        let active_runs = self.running.entry(dag_id.to_owned()).or_default();
+        // Airflow treats a missing or zero limit as unbounded at admission.
+        if max_active_runs.is_some_and(|limit| limit != 0 && *active_runs >= limit) {
+            return false;
+        }
+        *active_runs += 1;
+        true
+    }
 }

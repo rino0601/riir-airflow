@@ -9,9 +9,6 @@ from typing import TYPE_CHECKING
 from airflow import __version__
 from airflow.models.dagrun import DagRun
 from airflow.sdk import timezone
-from airflow.utils.state import DagRunState
-from airflow.utils.types import DagRunType
-from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 
 from riir_airflow import _lowlevel
@@ -54,28 +51,21 @@ def install_admission(executor_type: type) -> None:
 
 
 def _admit_manual_runs(runner: SchedulerJobRunner, session: Session) -> bool:
-    # Reuse Airflow's bounded, ordered SQLite candidate query within its
-    # scheduler transaction. Fall back before making any changes to a batch.
-    runs = list(DagRun.get_queued_dag_runs_to_set_running(session))
-    if any(
-        run.backfill_id is not None or run.run_type != DagRunType.MANUAL for run in runs
-    ):
-        return False
-    if not runs:
-        return True
-
-    running = session.execute(
-        select(DagRun.dag_id, func.count(DagRun.id))
-        .where(
-            DagRun.state == DagRunState.RUNNING,
-            DagRun.backfill_id.is_(None),
-            DagRun.dag_id.in_({run.dag_id for run in runs}),
-        )
-        .group_by(DagRun.dag_id)
+    connection = session.connection(bind_arguments={"mapper": DagRun})
+    # SQLite's legacy driver mode does not start a transaction for a SELECT.
+    # Keep the candidate snapshot and claims under the same write reservation.
+    # If Airflow already started a transaction, use it as-is.
+    if not connection.connection.driver_connection.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
+    session.flush()
+    candidates = _lowlevel.manual_dag_run_candidates(
+        connection, DagRun.DEFAULT_DAGRUNS_TO_EXAMINE
     )
-    budget = _lowlevel.DagRunAdmission(dict(running.tuples().all()))
+    if candidates is None:
+        return False
 
-    for run in runs:
+    for run_id in candidates:
+        run = session.get(DagRun, run_id)
         try:
             run.dag = runner.scheduler_dag_bag.get_dag_for_run(run, session=session)
         except DBAPIError:
@@ -90,8 +80,8 @@ def _admit_manual_runs(runner: SchedulerJobRunner, session: Session) -> bool:
         if not run.dag:
             runner.log.error("DAG '%s' not found in serialized_dag table", run.dag_id)
             continue
-        if budget.admit(run.dag_id, run.max_active_runs):
-            run.state = DagRunState.RUNNING
-            run.start_date = timezone.utcnow()
+        now = timezone.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")
+        if _lowlevel.start_manual_dag_run(connection, run.id, now):
+            session.refresh(run, ["_state", "start_date", "end_date", "updated_at"])
             run.notify_dagrun_state_changed(msg="started")
     return True

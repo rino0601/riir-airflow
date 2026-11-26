@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::Path;
 
 use pyo3::prelude::*;
@@ -47,26 +46,74 @@ pub fn status(database: &Path) -> rusqlite::Result<Value> {
     )
 }
 
-/// Track the occupied slots in one ordered scheduler admission batch.
-#[pyclass(module = "riir_airflow._lowlevel")]
-pub(crate) struct DagRunAdmission {
-    running: HashMap<String, i64>,
+/// Select the bounded Airflow 3.4 batch on SQLite, including backfill rows
+/// so the adapter can delegate mixed batches intact.
+#[pyfunction]
+pub(crate) fn manual_dag_run_candidates(
+    connection: &Bound<'_, PyAny>,
+    limit: i64,
+) -> PyResult<Option<Vec<i64>>> {
+    let rows = connection
+        .call_method1(
+            "exec_driver_sql",
+            (
+                "WITH running AS (
+                    SELECT dag_id, backfill_id, count(*) AS num_running
+                    FROM dag_run WHERE state = 'running'
+                    GROUP BY dag_id, backfill_id
+                )
+                SELECT r.id, r.run_type, r.backfill_id
+                FROM dag_run AS r
+                JOIN dag AS d ON d.dag_id = r.dag_id AND d.is_paused = 0 AND d.is_stale = 0
+                LEFT JOIN backfill_dag_run AS bdr
+                    ON bdr.dag_run_id = r.id AND bdr.backfill_id = r.backfill_id
+                LEFT JOIN backfill AS b ON b.id = bdr.backfill_id
+                LEFT JOIN running AS a
+                    ON a.dag_id = r.dag_id
+                    AND coalesce(a.backfill_id, -1) = coalesce(r.backfill_id, -1)
+                WHERE r.state = 'queued' AND r.run_after <= CURRENT_TIMESTAMP
+                    AND coalesce(a.num_running, 0) < coalesce(b.max_active_runs, d.max_active_runs)
+                    AND coalesce(b.is_paused, 0) = 0
+                ORDER BY bdr.sort_ordinal, r.last_scheduling_decision, a.num_running, r.run_after
+                LIMIT ?",
+                (limit,),
+            ),
+        )?
+        .call_method0("all")?;
+
+    let mut candidates = Vec::new();
+    for row in rows.try_iter()? {
+        let row = row?;
+        if row.get_item(1)?.extract::<String>()? != "manual" || !row.get_item(2)?.is_none() {
+            return Ok(None);
+        }
+        candidates.push(row.get_item(0)?.extract()?);
+    }
+    Ok(Some(candidates))
 }
 
-#[pymethods]
-impl DagRunAdmission {
-    #[new]
-    fn new(running: HashMap<String, i64>) -> Self {
-        Self { running }
-    }
-
-    fn admit(&mut self, dag_id: &str, max_active_runs: Option<i64>) -> bool {
-        let active_runs = self.running.entry(dag_id.to_owned()).or_default();
-        // Airflow treats a missing or zero limit as unbounded at admission.
-        if max_active_runs.is_some_and(|limit| limit != 0 && *active_runs >= limit) {
-            return false;
-        }
-        *active_runs += 1;
-        true
-    }
+/// Claim a queued run on Airflow's connection. The capacity check counts
+/// earlier claims in this transaction, and the queued predicate prevents
+/// a repeated claim from changing the start metadata or notifying again.
+#[pyfunction]
+pub(crate) fn start_manual_dag_run(
+    connection: &Bound<'_, PyAny>,
+    id: i64,
+    now: &str,
+) -> PyResult<bool> {
+    let updated = connection.call_method1(
+        "exec_driver_sql",
+        (
+            "UPDATE dag_run AS r
+            SET state = 'running', start_date = ?, end_date = NULL, updated_at = ?
+            WHERE r.id = ? AND r.state = 'queued' AND r.run_type = 'manual'
+                AND r.backfill_id IS NULL
+                AND (
+                    SELECT count(*) FROM dag_run AS a
+                    WHERE a.dag_id = r.dag_id AND a.backfill_id IS NULL AND a.state = 'running'
+                ) < (SELECT d.max_active_runs FROM dag AS d WHERE d.dag_id = r.dag_id)",
+            (now, now, id),
+        ),
+    )?;
+    Ok(updated.getattr("rowcount")?.extract::<i64>()? == 1)
 }

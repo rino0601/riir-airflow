@@ -291,17 +291,19 @@ with closing(sqlite3.connect("airflow.db")) as database:
     assert tasks()["newer", "high"][1] == "scheduled"
 
     admitted = tasks()["older", "high"]
+    # Free pool capacity while the first workload still fills the executor.
+    with create_session() as session:
+        session.execute(update(Pool).where(Pool.pool == "weighted").values(include_deferred=False))
     assert iteration() == 0
     assert len(queue) == 1
     assert tasks()["older", "high"] == admitted
+    assert tasks()["newer", "weighted"][1] == "scheduled"
 
     if mode == "fallback":
         assert selections == []
         assert claims == []
     else:
         queue.clear()
-        with create_session() as session:
-            session.execute(update(Pool).where(Pool.pool == "weighted").values(include_deferred=False))
         assert iteration() == 1
         assert_queued("newer", "weighted")
         assert tasks()["older", "weighted"][1] == "scheduled"
@@ -326,7 +328,7 @@ def test_sqlite_scheduler_admits_task_attempts(tmp_path: Path, mode: str):
         mode,
         _TaskDAG,
         _TASK_PROBE,
-        AIRFLOW__CORE__PARALLELISM="1",
+        AIRFLOW__CORE__PARALLELISM="4" if mode == "native" else "1",
         AIRFLOW__SCHEDULER__MAX_TIS_PER_QUERY="1",
     )
 

@@ -101,7 +101,10 @@ class NativeSchedulerDriver:
         if not self.supported():
             return self.phases.delegate_iteration()
         executor = self.runner.executor
-        slots = self.runner._parallelism - executor.slots_occupied
+        slots = min(
+            executor.slots_available,
+            self.runner._parallelism - executor.slots_occupied,
+        )
         max_tis = min(self.runner.job.max_tis_per_query or slots, slots)
         now = timezone.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")
         return self.native.run_iteration(

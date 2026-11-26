@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use rusqlite::{Connection, OpenFlags};
@@ -255,4 +256,96 @@ pub(crate) fn queue_sqlite_task(
         ),
     )?;
     Ok(updated.getattr("rowcount")?.extract::<i64>()? == 1)
+}
+
+/// Accept only executor outcomes that can be reconciled without Airflow's
+/// callback, retry or regional handling. A partial match delegates the whole
+/// batch so no event is consumed by the native path.
+#[pyfunction]
+pub(crate) fn select_sqlite_outcomes(
+    connection: &Bound<'_, PyAny>,
+    events: &str,
+    job_id: i64,
+) -> PyResult<Option<Vec<(String, String)>>> {
+    let parsed: Value =
+        serde_json::from_str(events).map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let event_count = parsed.as_array().map_or(0, Vec::len);
+
+    let rows = connection
+        .call_method1(
+            "exec_driver_sql",
+            (
+                "WITH events AS (
+                    SELECT json_extract(value, '$.id') AS id,
+                        json_extract(value, '$.state') AS state
+                    FROM json_each(?)
+                )
+                SELECT e.id, e.state
+                FROM events AS e
+                JOIN task_instance AS t ON t.id = e.id
+                WHERE e.state IN ('success', 'failed')
+                    AND t.working_set IS TRUE
+                    AND t.state = 'queued'
+                    AND t.queued_by_job_id = ?
+                    AND t.next_method IS NULL
+                    AND t.executor IS NULL
+                    AND t.region_id = '00000000000000000000000000000000'
+                    AND t.region_index < 0
+                    AND t.try_number > coalesce(t.max_tries, 0)",
+                (events, job_id),
+            ),
+        )?
+        .call_method0("all")?;
+
+    let mut selected = Vec::new();
+    for row in rows.try_iter()? {
+        let row = row?;
+        selected.push((row.get_item(0)?.extract()?, row.get_item(1)?.extract()?));
+    }
+    if selected.len() != event_count {
+        return Ok(None);
+    }
+    Ok(Some(selected))
+}
+
+/// Reconcile one executor outcome into a live queued attempt. The guards keep
+/// the update idempotent and leave a repeated or superseded event untouched.
+#[pyfunction]
+pub(crate) fn reconcile_sqlite_task_outcome(
+    connection: &Bound<'_, PyAny>,
+    id: &str,
+    state: &str,
+    job_id: i64,
+    now: &str,
+) -> PyResult<bool> {
+    // A live queued attempt that reports an outcome through the executor has
+    // been killed externally. Airflow fails that attempt; a stale success is
+    // not a successful task result.
+    connection.call_method1(
+        "exec_driver_sql",
+        (
+            "WITH outcome AS (SELECT ? AS state, ? AS now)
+            UPDATE task_instance
+            SET state = 'failed',
+                end_date = coalesce(end_date, (SELECT now FROM outcome)),
+                duration = CASE
+                    WHEN start_date IS NULL THEN NULL
+                    ELSE (julianday((SELECT now FROM outcome)) - julianday(start_date)) * 86400.0
+                END,
+                updated_at = (SELECT now FROM outcome)
+            WHERE id = ? AND working_set IS TRUE AND state = 'queued'
+                AND queued_by_job_id = ? AND next_method IS NULL AND executor IS NULL
+                AND region_id = '00000000000000000000000000000000' AND region_index < 0
+                AND (SELECT state FROM outcome) IN ('success', 'failed')
+                AND try_number > coalesce(max_tries, 0)",
+            (state, now, id, job_id),
+        ),
+    )?;
+    // SQLite reports -1 for a CTE update's rowcount; changes() gives the
+    // number of rows the guarded statement actually modified.
+    let changes = connection
+        .call_method1("exec_driver_sql", ("SELECT changes()",))?
+        .call_method0("scalar")?
+        .extract::<i64>()?;
+    Ok(changes == 1)
 }

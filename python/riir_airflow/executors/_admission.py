@@ -1,7 +1,8 @@
-"""Airflow 3.4.0 scheduler integration for SQLite scheduler admission."""
+"""Airflow 3.4.0 scheduler integration for SQLite scheduling decisions."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import sys
 from functools import wraps
@@ -9,10 +10,13 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from airflow import __version__
+from airflow.executors.workloads.types import TaskInstanceUuid
+from airflow.models import Log
 from airflow.models.dag_version import DagVersion
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.sdk import timezone
+from airflow.sdk.observability import stats
 from airflow.utils.state import TaskInstanceState
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
@@ -40,6 +44,7 @@ def install_admission(executor_type: type) -> None:
         return
 
     _install_task_admission(runner_type, executor_type)
+    _install_outcome_reconciliation(runner_type, executor_type)
 
     upstream = runner_type._start_queued_dagruns
     if getattr(upstream, "_riir_admission", False):
@@ -165,3 +170,132 @@ def _admit_task(runner: SchedulerJobRunner, session: Session) -> int | None:
     make_transient(ti)
     runner._enqueue_task_instances_with_queued_state([ti], executor, session=session)
     return 1
+
+
+def _install_outcome_reconciliation(runner_type: type, executor_type: type) -> None:
+    upstream = runner_type._process_executor_events
+    if getattr(upstream, "_riir_reconciliation", False):
+        return
+
+    @wraps(upstream)
+    def process(runner: SchedulerJobRunner, executor: object, session: Session) -> int:
+        if (
+            not runner._multi_team
+            and type(executor) is executor_type
+            and runner.executors == [executor]
+            and executor.parallelism == 1
+            and sqlite3.sqlite_version_info >= (3, 38)
+            and session.get_bind(mapper=TaskInstance).dialect.name == "sqlite"
+        ):
+            try:
+                count = _reconcile_outcomes(runner, executor, session)
+                if count is not None:
+                    return count
+            except Exception as exc:
+                stats.incr(
+                    "scheduler.executor_events.failed",
+                    tags={"exception_class": type(exc).__name__},
+                )
+                raise
+        return upstream(runner, executor, session)
+
+    process._riir_reconciliation = True
+    runner_type._process_executor_events = process
+
+
+def _reconcile_outcomes(
+    runner: SchedulerJobRunner, executor: object, session: Session
+) -> int | None:
+    events = dict(executor.event_buffer)
+    if not events:
+        return None
+
+    payload = []
+    for key, (state, _info) in events.items():
+        if not isinstance(key, TaskInstanceUuid) or state not in (
+            TaskInstanceState.SUCCESS,
+            TaskInstanceState.FAILED,
+        ):
+            return None
+        payload.append({"id": key.id.hex, "state": state.value})
+
+    connection = _admission_connection(session, TaskInstance)
+    supported = _lowlevel.select_sqlite_outcomes(
+        connection, json.dumps(payload), runner.job.id
+    )
+    if supported is None:
+        return None
+
+    ids = [UUID(hex=attempt_id) for attempt_id, _state in supported]
+    tis = {
+        ti.id.hex: ti
+        for ti in session.scalars(
+            select(TaskInstance)
+            .where(TaskInstance.id.in_(ids))
+            .options(joinedload(TaskInstance.dag_run))
+        ).all()
+    }
+    for attempt_id, _state in supported:
+        ti = tis.get(attempt_id)
+        if ti is None or executor.has_task(ti):
+            return None
+        dag = runner.scheduler_dag_bag.get_dag_for_run(
+            dag_run=ti.dag_run, session=session
+        )
+        task = dag.get_task(ti.task_id) if dag else None
+        if task is None:
+            return None
+        emails = getattr(task, "email", None) and (
+            getattr(task, "email_on_failure", False)
+            or getattr(task, "email_on_retry", False)
+        )
+        if (
+            getattr(dag, "fail_fast", False)
+            or getattr(task, "has_on_failure_callback", False)
+            or getattr(task, "has_on_retry_callback", False)
+            or emails
+        ):
+            return None
+
+    drained, coordinates = executor._drain_events_with_task_ids()
+    processed = 0
+    try:
+        now = timezone.utcnow().strftime("%Y-%m-%d %H:%M:%S.%f")
+        for key, (state, info) in drained.items():
+            attempt_id = key.id.hex
+            ti = tis[attempt_id]
+            if not _lowlevel.reconcile_sqlite_task_outcome(
+                connection, attempt_id, state.value, runner.job.id, now
+            ):
+                continue
+
+            session.refresh(
+                ti, ["state", "start_date", "end_date", "duration", "updated_at"]
+            )
+            msg = (
+                "Executor %s reported that the task instance %s finished with state %s, "
+                "but the task instance's state attribute is queued."
+                % (executor, ti, state)
+            )
+            if info is not None:
+                msg += " Extra info: %s" % info
+            session.add(Log(event="state mismatch", extra=msg, task_instance=ti))
+            stats.incr(
+                "scheduler.tasks.killed_externally",
+                tags={"dag_id": ti.dag_id, "task_id": ti.task_id},
+            )
+            session.add(Log(event=TaskInstanceState.FAILED.value, task_instance=ti))
+            ti.notify_failure(msg)
+            stats.incr(
+                "operator_failures",
+                tags={**ti.stats_tags, "operator_name": ti.operator},
+            )
+            stats.incr("ti_failures", tags=ti.stats_tags)
+            processed += 1
+    except Exception:
+        executor.event_buffer.update(drained)
+        executor._task_coordinates.update(coordinates)
+        raise
+
+    runner._emit_executor_events_batch_metrics(processed)
+    return len(executor.event_buffer)

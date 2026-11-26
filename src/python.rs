@@ -144,6 +144,11 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scheduler::start_manual_dag_run, m)?)?;
     m.add_function(wrap_pyfunction!(scheduler::select_sqlite_task, m)?)?;
     m.add_function(wrap_pyfunction!(scheduler::queue_sqlite_task, m)?)?;
+    m.add_function(wrap_pyfunction!(scheduler::select_sqlite_outcomes, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        scheduler::reconcile_sqlite_task_outcome,
+        m
+    )?)?;
     m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;
     Ok(())

@@ -153,7 +153,14 @@ def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path, mode: str):
     _run_probe(tmp_path, mode, _DAG, _SCHEDULER_PROBE)
 
 
-def _run_probe(tmp_path: Path, mode: str, dag_source: str, probe: str, **config: str):
+def _run_probe(
+    tmp_path: Path,
+    mode: str,
+    dag_source: str,
+    probe: str,
+    probe_args: tuple[str, ...] = (),
+    **config: str,
+):
     assert airflow.__version__ == BASELINE_AIRFLOW_VERSION
     dags = tmp_path / "dags"
     dags.mkdir()
@@ -170,7 +177,7 @@ def _run_probe(tmp_path: Path, mode: str, dag_source: str, probe: str, **config:
         AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION="False",
         AIRFLOW__CORE__EXECUTOR=(
             "LocalExecutor"
-            if mode.endswith("baseline")
+            if mode.startswith("baseline") or mode == "mixed-baseline"
             else "riir_airflow.executors.asgi_executor.AsgiExecutor"
         ),
         AIRFLOW__API_AUTH__JWT_SECRET="admission-probe-test-secret-" * 3,
@@ -180,7 +187,7 @@ def _run_probe(tmp_path: Path, mode: str, dag_source: str, probe: str, **config:
     for args in (
         ("-m", "airflow", "db", "migrate"),
         ("-m", "airflow", "dag-processor", "--num-runs", "1"),
-        ("-c", probe, mode),
+        ("-c", probe, mode, *probe_args),
     ):
         result = subprocess.run(
             [sys.executable, *args],
@@ -386,4 +393,203 @@ def test_sqlite_scheduler_admits_task_attempts(tmp_path: Path, mode: str):
         _TASK_PROBE,
         AIRFLOW__CORE__PARALLELISM="1",
         AIRFLOW__SCHEDULER__MAX_TIS_PER_QUERY="1",
+    )
+
+
+_OUTCOME_DAG = """\
+import os
+
+from airflow.sdk import DAG, task
+
+with DAG("outcome_probe", schedule=None) as dag:
+    @task(retries=int(os.environ["OUTCOME_RETRIES"]))
+    def work():
+        pass
+
+    work()
+"""
+
+_OUTCOME_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+from unittest.mock import patch
+from uuid import UUID
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.executors.workloads import WorkloadType
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.taskinstance import TaskInstance
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.state import TaskInstanceState
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow import _lowlevel
+
+mode = sys.argv[1]
+retries = int(sys.argv[2])
+native = mode.startswith("native")
+outcome = (
+    TaskInstanceState.FAILED
+    if "failure" in mode or ("retry" in mode and "success" not in mode)
+    else TaskInstanceState.SUCCESS
+)
+expected = (
+    TaskInstanceState.UP_FOR_RETRY if "retry" in mode else TaskInstanceState.FAILED
+)
+select_outcomes = _lowlevel.select_sqlite_outcomes
+reconcile_outcome = _lowlevel.reconcile_sqlite_task_outcome
+selections = []
+claims = []
+
+
+def observe_selection(connection, events, job_id):
+    result = select_outcomes(connection, events, job_id)
+    selections.append(result)
+    return result
+
+
+def observe_reconcile(connection, attempt_id, state, job_id, now):
+    claimed = reconcile_outcome(connection, attempt_id, state, job_id, now)
+    claims.append((attempt_id, state, claimed))
+    if claimed:
+        assert not reconcile_outcome(connection, attempt_id, state, job_id, "2000-01-01 00:00:00.000000")
+    return claimed
+
+
+_lowlevel.select_sqlite_outcomes = observe_selection
+_lowlevel.reconcile_sqlite_task_outcome = observe_reconcile
+
+job = Job()
+runner = SchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+trigger_dag(
+    "outcome_probe",
+    run_id="outcome",
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+# First iteration admits the run and resolves dependencies without queueing work.
+with patch.object(runner, "_parallelism", 0):
+    assert iteration() == 0
+assert iteration() == 1
+
+queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
+[(key, workload)] = list(queue.items())
+queue.clear()
+runner.executor.running.add(key)
+coordinates = runner.executor._task_coordinates.copy()
+if outcome == TaskInstanceState.SUCCESS:
+    runner.executor.success(key)
+else:
+    runner.executor.fail(key)
+event = dict(runner.executor.event_buffer)
+assert event and runner.executor.running == set()
+
+with closing(sqlite3.connect("airflow.db")) as database:
+    def active():
+        return database.execute(
+            "SELECT id, state, start_date, end_date, duration, updated_at, try_number "
+            "FROM task_instance WHERE dag_id = 'outcome_probe' AND working_set IS TRUE"
+        ).fetchall()
+
+    [attempt] = active()
+    attempt_id, state, start, end, duration, updated, try_number = attempt
+    assert (state, start, end, duration, try_number) == (
+        "queued", None, None, None, 1,
+    )
+    assert updated is not None
+
+    def restore():
+        runner.executor.event_buffer.update(event)
+        runner.executor._task_coordinates.update(coordinates)
+
+    if native and "retry" in mode:
+        selections.clear()
+        claims.clear()
+    elif native:
+        # The Rust update stays inside the scheduler session until Airflow
+        # commits it. Retry fallback owns its commit inside handle_failure.
+        with create_session() as session:
+            assert runner._process_executor_events(runner.executor, session) == 0
+            ti = session.get(TaskInstance, UUID(hex=attempt_id))
+            assert ti.state == expected.value
+            assert active()[0][1] == "queued"
+            session.rollback()
+        assert active() == [attempt]
+        assert claims == [(attempt_id, outcome.value, True)]
+        restore()
+        selections.clear()
+        claims.clear()
+
+    with create_session() as session:
+        assert runner._process_executor_events(runner.executor, session) == 0
+
+    [finished] = active()
+    assert finished[1] == expected.value
+    assert finished[5] is not None
+    assert finished[6] == (2 if "retry" in mode else 1)
+    if "retry" in mode:
+        assert finished[2] is None
+        assert finished[3] is None
+        assert finished[4] is None
+    else:
+        assert finished[2] is None
+        assert finished[3] is not None
+        assert finished[4] is None
+
+    # A repeated outcome cannot overwrite the terminal attempt.
+    restore()
+    with create_session() as session:
+        runner._process_executor_events(runner.executor, session)
+    assert active() == [finished]
+
+    if native and "retry" in mode:
+        assert selections == [None, None]
+        assert claims == []
+    elif native:
+        assert selections == [[(attempt_id, outcome.value)], None]
+        assert claims == [(attempt_id, outcome.value, True)]
+    else:
+        assert selections == []
+        assert claims == []
+"""
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "baseline-success",
+        "native-success",
+        "baseline-failure",
+        "native-failure",
+        "baseline-retry",
+        "native-retry",
+        "baseline-success-retry",
+        "native-success-retry",
+    ],
+)
+def test_sqlite_scheduler_reconciles_task_outcomes(tmp_path: Path, mode: str):
+    retries = "1" if "retry" in mode else "0"
+    _run_probe(
+        tmp_path,
+        mode,
+        _OUTCOME_DAG,
+        _OUTCOME_PROBE,
+        retries,
+        AIRFLOW__CORE__PARALLELISM="1",
+        AIRFLOW__SCHEDULER__MAX_TIS_PER_QUERY="1",
+        OUTCOME_RETRIES=retries,
     )

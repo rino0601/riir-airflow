@@ -560,6 +560,7 @@ dependencies = [
  "clap",
  "futures-util",
  "http-body-util",
+ "libc",
  "percent-encoding",
  "pyo3",
  "pyo3-async-runtimes",

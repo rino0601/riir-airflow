@@ -1,12 +1,14 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+
+use crate::executor::{self, Executor, Workload};
 
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
-use rusqlite::types::ValueRef;
 use rusqlite::{Connection, ErrorCode, OpenFlags, TransactionBehavior, named_params, params};
 use serde_json::{Value, json};
 
@@ -22,28 +24,24 @@ const RUN_COLUMNS: &str = "r.id AS id, r.dag_id AS dag_id, r.run_id AS run_id,
     r.log_template_id AS log_template_id, r.context_carrier AS context_carrier";
 
 const TASK_COLUMNS: &str = "t.id AS id, t.task_id AS task_id, t.dag_id AS dag_id,
-    t.run_id AS run_id, t.try_number AS try_number,
-    t.dag_version_id AS dag_version_id, t.region_id AS region_id,
-    t.region_index AS region_index, t.hostname AS hostname,
-    t.context_carrier AS context_carrier, t.queue AS queue, t.pool AS pool,
+    t.run_id AS run_id, t.try_number AS try_number, t.dag_version_id AS dag_version_id,
+    t.region_index AS region_index,
+    t.context_carrier AS context_carrier, t.queue AS queue,
     t.pool_slots AS pool_slots, t.priority_weight AS priority_weight,
-    t.external_executor_id AS external_executor_id,
-    t.executor_config AS executor_config, t.next_method AS next_method,
-    t.next_kwargs AS next_kwargs, t.trigger_id AS trigger_id,
-    t.state AS state, t.queued_dttm AS queued_dttm,
-    t.queued_by_job_id AS queued_by_job_id, t.updated_at AS updated_at,
     d.bundle_name AS bundle_name, d.relative_fileloc AS relative_fileloc,
-    d.fail_fast AS fail_fast, d.has_task_concurrency_limits AS has_task_concurrency_limits,
     r.logical_date AS logical_date, r.run_after AS run_after,
-    r.data_interval_start AS data_interval_start,
-    r.data_interval_end AS data_interval_end, r.bundle_version AS bundle_version,
-    r.created_dag_version_id AS created_dag_version_id, r.state AS run_state,
-    dv.bundle_version AS version_bundle_version, dv.version_data AS version_data";
+    r.data_interval_start AS data_interval_start, r.data_interval_end AS data_interval_end,
+    r.bundle_version AS bundle_version, dv.bundle_version AS version_bundle_version,
+    dv.version_data AS version_data";
 
 const NATIVE_TASK_REQUIREMENTS: &str = "NOT coalesce(d.has_task_concurrency_limits, 0)
     AND t.executor IS NULL AND t.dag_version_id IS NOT NULL
     AND dv.id IS NOT NULL
     AND (t.region_id = :sentinel_region OR t.region_id IS NULL)
+    AND t.region_index = -1 AND r.run_type = 'manual' AND r.backfill_id IS NULL
+    AND coalesce(t.operator, '') != 'LoopGateOperator'
+    AND t.queue = 'default' AND t.external_executor_id IS NULL
+    AND (t.executor_config IS NULL OR t.executor_config IN (X'80047D942E', X'80057D942E'))
     AND t.pool_slots > 0
     AND t.next_method IS NULL AND t.next_kwargs IS NULL
     AND t.trigger_id IS NULL
@@ -64,17 +62,6 @@ fn is_busy(error: &rusqlite::Error) -> bool {
 
 fn get_optional_string(row: &rusqlite::Row<'_>, name: &str) -> Result<Option<String>, PyErr> {
     row.get::<_, Option<String>>(name).map_err(sql_error)
-}
-
-fn get_optional_blob(row: &rusqlite::Row<'_>, name: &str) -> Result<Option<Vec<u8>>, PyErr> {
-    match row.get_ref(name).map_err(sql_error)? {
-        ValueRef::Null => Ok(None),
-        ValueRef::Blob(value) => Ok(Some(value.to_vec())),
-        ValueRef::Text(value) => Ok(Some(value.to_vec())),
-        ValueRef::Integer(_) | ValueRef::Real(_) => Err(PyValueError::new_err(format!(
-            "unexpected scalar in blob column: {name}"
-        ))),
-    }
 }
 
 fn py_to_sql(error: PyErr) -> rusqlite::Error {
@@ -125,11 +112,7 @@ fn run_dto<'py>(py: Python<'py>, row: &rusqlite::Row<'_>) -> PyResult<Bound<'py,
     Ok(dto)
 }
 
-fn task_dto<'py>(
-    py: Python<'py>,
-    row: &rusqlite::Row<'_>,
-    state: &str,
-) -> PyResult<Bound<'py, PyDict>> {
+fn task_dto<'py>(py: Python<'py>, row: &rusqlite::Row<'_>) -> PyResult<Bound<'py, PyDict>> {
     let dto = PyDict::new(py);
     for key in [
         "id",
@@ -137,17 +120,8 @@ fn task_dto<'py>(
         "dag_id",
         "run_id",
         "dag_version_id",
-        "region_id",
-        "hostname",
         "context_carrier",
         "queue",
-        "pool",
-        "external_executor_id",
-        "next_method",
-        "next_kwargs",
-        "trigger_id",
-        "queued_dttm",
-        "updated_at",
         "bundle_name",
         "relative_fileloc",
         "logical_date",
@@ -155,50 +129,18 @@ fn task_dto<'py>(
         "data_interval_start",
         "data_interval_end",
         "bundle_version",
-        "created_dag_version_id",
-        "run_state",
         "version_bundle_version",
         "version_data",
     ] {
         set(&dto, key, get_optional_string(row, key)?)?;
     }
-    set(
-        &dto,
-        "executor_config",
-        get_optional_blob(row, "executor_config")?,
-    )?;
-    set(
-        &dto,
-        "state",
-        row.get::<_, Option<String>>("state")
-            .map_err(sql_error)?
-            .unwrap_or_else(|| state.to_owned()),
-    )?;
-    for key in [
-        "try_number",
-        "region_index",
-        "pool_slots",
-        "priority_weight",
-        "queued_by_job_id",
-    ] {
+    for key in ["try_number", "pool_slots", "priority_weight"] {
         set(
             &dto,
             key,
             row.get::<_, Option<i64>>(key).map_err(sql_error)?,
         )?;
     }
-    set(
-        &dto,
-        "fail_fast",
-        row.get::<_, i64>("fail_fast").map_err(sql_error)? != 0,
-    )?;
-    set(
-        &dto,
-        "has_task_concurrency_limits",
-        row.get::<_, i64>("has_task_concurrency_limits")
-            .map_err(sql_error)?
-            != 0,
-    )?;
     Ok(dto)
 }
 
@@ -246,15 +188,16 @@ pub fn status(database: &Path) -> rusqlite::Result<Value> {
 #[pyclass(unsendable)]
 pub(crate) struct NativeScheduler {
     connection: Connection,
+    executor: Executor,
 }
 
 #[pymethods]
 impl NativeScheduler {
     #[new]
     fn new(database: PathBuf) -> PyResult<Self> {
-        let path = Path::new(".").join(database);
+        let path = Path::new(".").join(&database);
         let connection = Connection::open_with_flags(
-            path,
+            &path,
             OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
         )
         .map_err(sql_error)?;
@@ -264,7 +207,12 @@ impl NativeScheduler {
         connection
             .execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
             .map_err(sql_error)?;
-        Ok(Self { connection })
+        executor::initialize(&connection).map_err(sql_error)?;
+        let executor = Executor::new(path.canonicalize().map_err(executor::error)?);
+        Ok(Self {
+            connection,
+            executor,
+        })
     }
 
     /// Compose the two Rust-owned admission transactions around Airflow's phases.
@@ -276,13 +224,14 @@ impl NativeScheduler {
         job_id: i64,
         now: &str,
     ) -> PyResult<usize> {
+        let lease = self.executor.available(&mut self.connection)?;
         phases.call_method0("before_runs")?;
 
         let (status, _) = self.claim_dag_runs(phases, dag_run_limit, now)?;
         match status.as_str() {
             "fallback" => {
                 return phases
-                    .call_method0("delegate_after_run_creation")?
+                    .call_method1("delegate_after_run_creation", (lease.is_some(),))?
                     .extract::<usize>();
             }
             "locked" => return Ok(0),
@@ -290,7 +239,10 @@ impl NativeScheduler {
         }
 
         phases.call_method0("between_phases")?;
-        let (status, count) = self.claim_task(phases, max_tis, job_id, now)?;
+        let Some(lease) = lease else {
+            return Ok(0);
+        };
+        let (status, count) = self.claim_task(phases, max_tis, job_id, now, lease)?;
         match status.as_str() {
             "fallback" => phases
                 .call_method0("delegate_task_phase")?
@@ -308,6 +260,9 @@ impl NativeScheduler {
         limit: i64,
         stale_before: &str,
     ) -> PyResult<Option<usize>> {
+        let Some(lease) = self.executor.available(&mut self.connection)? else {
+            return Ok(Some(0));
+        };
         let py = phases.py();
         let transaction = match self
             .connection
@@ -327,6 +282,7 @@ impl NativeScheduler {
             .map_err(sql_error)?;
         let sql = format!(
             "SELECT {TASK_COLUMNS},
+                t.queued_by_job_id AS previous_job_id,
                 coalesce(t.state = 'queued' AND {NATIVE_TASK_REQUIREMENTS}, 0) AS supported
             FROM task_instance AS t
             JOIN dag_run AS r ON r.dag_id = t.dag_id AND r.run_id = t.run_id
@@ -346,7 +302,8 @@ impl NativeScheduler {
                     named_params! {":job_id": job_id, ":sentinel_region": SENTINEL_REGION},
                     |row| {
                         if row.get::<_, bool>("supported")? {
-                            task_dto(py, row, "queued").map(Some).map_err(py_to_sql)
+                            let dto = task_dto(py, row).map_err(py_to_sql)?;
+                            Ok(Some((dto, row.get::<_, i64>("previous_job_id")?)))
                         } else {
                             Ok(None)
                         }
@@ -360,33 +317,55 @@ impl NativeScheduler {
             return Ok(Some(0));
         };
         // Let Airflow handle all orphans if any attempt falls outside native recovery.
-        let Some(dto) = candidate else {
+        let Some((dto, previous_job_id)) = candidate else {
             return Ok(None);
         };
         if limit <= 0 {
             transaction.commit().map_err(sql_error)?;
             return Ok(Some(0));
         }
-        if !phases
-            .call_method1("prepare_task", (dto.clone(),))?
-            .is_truthy()?
-        {
+        let Some(workload) = prepare_workload(phases, &dto)? else {
             return Ok(None);
-        }
-        let id: String = item(&dto, "id")?.extract()?;
+        };
         let updated = transaction
             .execute(
                 "UPDATE task_instance SET queued_by_job_id = ?1 WHERE id = ?2",
-                params![job_id, id],
+                params![job_id, workload.id],
             )
             .map_err(sql_error)?;
         if updated != 1 {
             transaction.commit().map_err(sql_error)?;
             return Ok(Some(0));
         }
-        dto.set_item("queued_by_job_id", job_id)?;
-        commit_workload(transaction, phases, dto)?;
-        Ok(Some(1))
+        workload
+            .reserve(&transaction, job_id, Some(previous_job_id))
+            .map_err(sql_error)?;
+        transaction.commit().map_err(sql_error)?;
+        Ok(Some(usize::from(self.launch(workload, lease)?)))
+    }
+
+    fn active_task(&self) -> PyResult<Option<String>> {
+        use rusqlite::OptionalExtension;
+        self.connection
+            .query_row("SELECT id FROM riir_attempt WHERE active = 1", [], |row| {
+                row.get(0)
+            })
+            .optional()
+            .map_err(sql_error)
+    }
+    fn wait_for_task(&mut self) -> PyResult<()> {
+        self.executor.wait(&mut self.connection)
+    }
+}
+
+impl NativeScheduler {
+    fn launch(&mut self, workload: Workload, lease: File) -> PyResult<bool> {
+        if let Err(err) = self.executor.launch(workload, lease) {
+            eprintln!("Could not launch native task supervisor: {err}");
+            self.executor.available(&mut self.connection)?;
+            return Ok(false);
+        }
+        Ok(true)
     }
 
     fn claim_dag_runs(
@@ -494,6 +473,7 @@ impl NativeScheduler {
         max_tis: i64,
         job_id: i64,
         now: &str,
+        lease: File,
     ) -> PyResult<(String, usize)> {
         if max_tis <= 0 {
             return Ok(("committed".into(), 0));
@@ -559,7 +539,7 @@ impl NativeScheduler {
                         let slots: i64 = row.get::<_, i64>("pool_slots")?;
                         let dag_id: String = row.get::<_, String>("dag_id")?;
                         let task_id: String = row.get::<_, String>("task_id")?;
-                        let dto = task_dto(py, row, "scheduled").map_err(py_to_sql)?;
+                        let dto = task_dto(py, row).map_err(py_to_sql)?;
                         Ok((supported, pool, slots, dag_id, task_id, dto))
                     },
                 )
@@ -596,19 +576,14 @@ impl NativeScheduler {
             return Ok(("committed".into(), 0));
         };
 
-        if !phases
-            .call_method1("prepare_task", (dto.clone(),))?
-            .is_truthy()?
-        {
+        let Some(workload) = prepare_workload(phases, &dto)? else {
             return Ok(("fallback".into(), 0));
-        }
-
-        let id: String = item(&dto, "id")?.extract()?;
+        };
         let updated = match transaction.execute(
             "UPDATE task_instance SET state = 'queued', queued_dttm = ?1,
                 queued_by_job_id = ?2, updated_at = ?3
             WHERE id = ?4 AND working_set IS TRUE AND state = 'scheduled'",
-            params![now, job_id, now, id],
+            params![now, job_id, now, workload.id],
         ) {
             Ok(updated) => updated,
             Err(error) if is_busy(&error) => return Ok(("locked".into(), 0)),
@@ -618,35 +593,33 @@ impl NativeScheduler {
             transaction.commit().map_err(sql_error)?;
             return Ok(("committed".into(), 0));
         }
-        {
-            let claimed = &dto;
-            claimed.set_item("state", "queued")?;
-            claimed.set_item("queued_dttm", now)?;
-            claimed.set_item("queued_by_job_id", job_id)?;
-            claimed.set_item("updated_at", now)?;
-        }
-        commit_workload(transaction, phases, dto)?;
-        Ok(("committed".into(), 1))
+        workload
+            .reserve(&transaction, job_id, None)
+            .map_err(sql_error)?;
+        transaction.commit().map_err(sql_error)?;
+        Ok((
+            "committed".into(),
+            usize::from(self.launch(workload, lease)?),
+        ))
     }
 }
 
-fn commit_workload(
-    transaction: rusqlite::Transaction<'_>,
+fn prepare_workload(
     phases: &Bound<'_, PyAny>,
-    dto: Bound<'_, PyDict>,
-) -> PyResult<()> {
-    let result = (|| {
-        if !phases.call_method1("task_claimed", (dto,))?.is_truthy()? {
-            return Err(PyRuntimeError::new_err(
-                "executor did not enqueue one workload",
-            ));
-        }
-        transaction.commit().map_err(sql_error)
-    })();
-    if result.is_err() {
-        let _ = phases.call_method0("discard_pending_workload");
+    dto: &Bound<'_, PyDict>,
+) -> PyResult<Option<Workload>> {
+    let launch = phases.call_method1("prepare_workload", (dto,))?;
+    if launch.is_none() {
+        return Ok(None);
     }
-    result
+    let (generation, python, payload) = launch.extract()?;
+    Ok(Some(Workload {
+        id: item(dto, "id")?.extract()?,
+        try_number: item(dto, "try_number")?.extract()?,
+        generation,
+        python,
+        payload,
+    }))
 }
 
 fn pool_capacity(

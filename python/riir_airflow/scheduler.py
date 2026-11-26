@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-import pickle
 import sqlite3
+import sys
 from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
 from functools import cached_property, lru_cache, partial
@@ -14,20 +14,19 @@ from uuid import UUID
 
 from airflow import __version__
 from airflow.configuration import conf
-from airflow.executors.base_executor import TaskInstanceUuid
-from airflow.executors.workloads import WorkloadType
+from airflow.executors.base_executor import get_execution_api_server_url
+from airflow.executors.workloads import BundleInfo, ExecuteTask, TaskInstanceDTO
 from airflow.jobs.scheduler_job_runner import SchedulerJobRunner, prohibit_commit
 from airflow.listeners.listener import get_listener_manager
-from airflow.models.dag import DagModel
 from airflow.models.dag_version import DagVersion
 from airflow.models.dagrun import DagRun
-from airflow.models.taskinstance import TaskInstance
 from airflow.sdk import timezone
-from airflow.utils.log.task_log_address import SENTINEL_REGION_ID
+from airflow.sdk.execution_time.coordinator import get_coordinator_manager
+from airflow.utils.log.task_log_address import TaskLogContext, render_task_log_filename
 from airflow.utils.session import NEW_SESSION, create_session
-from airflow.utils.state import TaskInstanceState
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import make_transient
+from uuid6 import uuid7
 
 from riir_airflow import _lowlevel
 from riir_airflow.executors.asgi_executor import AsgiExecutor
@@ -75,7 +74,7 @@ class NativeSchedulerDriver:
         return _lowlevel.NativeScheduler(str(_database_path()))
 
     def supported(self) -> bool:
-        if __version__ != "3.4.0":
+        if __version__ != "3.4.0" or sys.platform != "linux":
             return False
         if self.runner._multi_team:
             return False
@@ -93,7 +92,11 @@ class NativeSchedulerDriver:
             return False
         if sqlite3.sqlite_version_info < (3, 38):
             return False
-        return not get_listener_manager().has_listeners
+        return (
+            not get_listener_manager().has_listeners
+            and not get_coordinator_manager().has_coordinators()
+            and not conf.getboolean("state_store", "clear_on_success")
+        )
 
     def run_iteration(self) -> int:
         if not self.supported():
@@ -134,8 +137,6 @@ class SchedulerPhases:
     def __init__(self, runner: SchedulerJobRunner):
         self.runner = runner
         self._runs: dict[int, DagRun] = {}
-        self._pending_ti: TaskInstance | None = None
-        self._pending_before: set[object] | None = None
 
     @property
     def dag_bag(self) -> DBDagBag:
@@ -225,13 +226,13 @@ class SchedulerPhases:
         with create_session() as session:
             return SchedulerJobRunner._do_scheduling(self.runner, session)
 
-    def delegate_after_run_creation(self) -> int:
+    def delegate_after_run_creation(self, slot_available: bool) -> int:
         with create_session() as session:
             with prohibit_commit(session) as guard:
                 self.runner._start_queued_dagruns(session)
                 guard.commit()
         self.between_phases()
-        if self.runner.executor.slots_available <= 0:
+        if not slot_available or self.runner.executor.slots_available <= 0:
             return 0
         return self.delegate_task_phase()
 
@@ -239,109 +240,71 @@ class SchedulerPhases:
         with create_session() as session:
             return self.runner._critical_section_enqueue_task_instances(session=session)
 
-    def prepare_task(self, dto: dict) -> bool:
-        self._pending_ti = None
-        self._pending_before = None
-        if (
-            dto["fail_fast"]
-            or dto["has_task_concurrency_limits"]
-            or dto["next_method"]
-            or _json(dto["next_kwargs"])
-            or dto["trigger_id"]
-        ):
-            return False
-        region = _uuid(dto["region_id"]) or SENTINEL_REGION_ID
-        if region != SENTINEL_REGION_ID:
-            return False
+    def prepare_workload(self, dto: dict) -> tuple[str, str, str] | None:
         version = _uuid(dto["dag_version_id"])
-        run_version = _uuid(dto["created_dag_version_id"])
-        dag = self._load_dag(dto["dag_id"], version or run_version)
-        if dag is None:
-            return False
-        try:
-            task = dag.get_task(dto["task_id"])
-        except Exception:
-            return False
-        if task is None:
-            return False
-
-        ti = TaskInstance(
-            task,
-            version,
-            run_id=dto["run_id"],
-            state=dto["state"],
-            map_index=dto["region_index"] if dto["region_index"] is not None else -1,
-            region_id=region,
-            region_index=dto["region_index"],
-        )
-        ti.id = _uuid(dto["id"])
-        ti.try_number = dto["try_number"] or 1
-        ti.hostname = dto["hostname"]
-        ti.context_carrier = _json(dto["context_carrier"])
-        ti.queue = dto["queue"] or "default"
-        ti.pool_slots = dto["pool_slots"] or 1
-        ti.priority_weight = dto["priority_weight"] or 0
-        ti.external_executor_id = dto["external_executor_id"]
-        ti.executor_config = (
-            pickle.loads(dto["executor_config"]) if dto["executor_config"] else {}
-        )
-        ti.queued_dttm = _datetime(dto["queued_dttm"])
-        ti.queued_by_job_id = dto["queued_by_job_id"]
-        ti.updated_at = _datetime(dto["updated_at"])
-        ti.dag_model = DagModel(
-            dag_id=dto["dag_id"],
-            bundle_name=dto["bundle_name"],
-            relative_fileloc=dto["relative_fileloc"],
-        )
-        run = DagRun(
+        dag = self._load_dag(dto["dag_id"], version)
+        if (
+            dag is None
+            or dto["task_id"] not in dag.task_dict
+            or not dto["relative_fileloc"]
+        ):
+            return None
+        task = dag.get_task(dto["task_id"])
+        if task.outlets:
+            return None
+        ti = TaskInstanceDTO(
+            id=dto["id"],
+            task_id=dto["task_id"],
             dag_id=dto["dag_id"],
             run_id=dto["run_id"],
-            logical_date=_datetime(dto["logical_date"]),
-            run_after=_datetime(dto["run_after"]),
-            bundle_version=dto["bundle_version"],
+            dag_version_id=version,
+            try_number=dto["try_number"],
+            pool_slots=dto["pool_slots"],
+            priority_weight=dto["priority_weight"] or 0,
+            context_carrier=_json(dto["context_carrier"]),
+            queue=dto["queue"],
         )
-        run.state = dto["run_state"]
-        run.data_interval_start = _datetime(dto["data_interval_start"])
-        run.data_interval_end = _datetime(dto["data_interval_end"])
-        run.created_dag_version_id = run_version
-        run.created_dag_version = DagVersion(
-            id=run_version,
-            bundle_version=dto["version_bundle_version"],
-            version_data=_json(dto["version_data"]),
+        bundle_version = dto["bundle_version"]
+        bundle = BundleInfo(
+            name=dto["bundle_name"],
+            version=bundle_version,
+            version_data=(
+                _json(dto["version_data"])
+                if bundle_version and bundle_version == dto["version_bundle_version"]
+                else None
+            ),
         )
-        ti.dag_run = run
-        make_transient(ti)
-        make_transient(run)
-        if self.runner.executor.has_task(ti):
-            return False
-        self._pending_ti = ti
-        return True
-
-    def task_claimed(self, dto: dict) -> bool:
-        ti = self._pending_ti
-        if ti is None:
-            return False
-        queue = self.runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
-        self._pending_before = set(queue)
-        ti.state = dto["state"]
-        ti.queued_dttm = _datetime(dto["queued_dttm"])
-        ti.queued_by_job_id = dto["queued_by_job_id"]
-        ti.updated_at = _datetime(dto["updated_at"])
-        ti.emit_state_change_metric(TaskInstanceState.QUEUED)
-        self.runner._enqueue_task_instances_with_queued_state(
-            [ti], self.runner.executor, session=None
+        context = TaskLogContext(
+            filename_template=conf.get("logging", "log_filename_template"),
+            logical_date=_datetime(dto["logical_date"] or dto["run_after"]).isoformat(),
+            data_interval_start=(
+                _datetime(dto["data_interval_start"]).isoformat()
+                if dto["data_interval_start"]
+                else ""
+            ),
+            data_interval_end=(
+                _datetime(dto["data_interval_end"]).isoformat()
+                if dto["data_interval_end"]
+                else ""
+            ),
         )
-        return len(set(queue) - self._pending_before) == 1
-
-    def discard_pending_workload(self) -> None:
-        if self._pending_before is not None and self._pending_ti is not None:
-            executor = self.runner.executor
-            queue = executor.executor_queues[WorkloadType.EXECUTE_TASK]
-            for key in set(queue) - self._pending_before:
-                queue.pop(key)
-            executor._task_coordinates.pop(TaskInstanceUuid(self._pending_ti.id), None)
-        self._pending_before = None
-        self._pending_ti = None
+        server = get_execution_api_server_url(self.runner.executor.conf)
+        workload = ExecuteTask(
+            ti=ti,
+            dag_rel_path=Path(dto["relative_fileloc"]),
+            token=ExecuteTask.generate_token(
+                str(ti.id), self.runner.executor.jwt_generator
+            ),
+            log_path=render_task_log_filename(ti, ti.try_number, context=context),
+            bundle_info=bundle,
+        )
+        return (
+            uuid7().hex,
+            sys.executable,
+            json.dumps(
+                {"workload": workload.model_dump(mode="json"), "server": server}
+            ),
+        )
 
     def _load_dag(self, dag_id: str, version: UUID | None):
         with create_session(scoped=False) as session:
@@ -360,6 +323,13 @@ class NativeSchedulerJobRunner(SchedulerJobRunner):
         super().__init__(*args, **kwargs)
         self.native_driver = NativeSchedulerDriver(self)
 
+    def _execute(self):
+        try:
+            return super()._execute()
+        finally:
+            if "native" in vars(self.native_driver):
+                self.native_driver.native.wait_for_task()
+
     def _do_scheduling(self, session) -> int:
         try:
             return self.native_driver.run_iteration()
@@ -373,6 +343,25 @@ class NativeSchedulerJobRunner(SchedulerJobRunner):
         if session is NEW_SESSION:
             return super().adopt_or_reset_orphaned_tasks()
         return super().adopt_or_reset_orphaned_tasks(session=session)
+
+    def _get_tis_stuck_in_queued(self, session):
+        active = self._native_active_task()
+        return (
+            ti for ti in super()._get_tis_stuck_in_queued(session) if ti.id != active
+        )
+
+    def _find_task_instances_without_heartbeats(self, *, session):
+        active = self._native_active_task()
+        return [
+            ti
+            for ti in super()._find_task_instances_without_heartbeats(session=session)
+            if ti.id != active
+        ]
+
+    def _native_active_task(self):
+        if self.native_driver.supported():
+            return _uuid(self.native_driver.native.active_task())
+        return None
 
 
 def main() -> None:

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use crate::HEALTH_BODY;
 use crate::cli::{self, ServeMode, Subcommand};
+use crate::executor::{register_attempt, register_task_group, report_outcome};
 use crate::local_executor::drain_local_commands;
 use crate::native::serve;
 use crate::scheduler;
@@ -141,6 +142,9 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse_cli, m)?)?;
     m.add_function(wrap_pyfunction!(scheduler_status, m)?)?;
     m.add_class::<scheduler::NativeScheduler>()?;
+    m.add_function(wrap_pyfunction!(register_attempt, m)?)?;
+    m.add_function(wrap_pyfunction!(register_task_group, m)?)?;
+    m.add_function(wrap_pyfunction!(report_outcome, m)?)?;
     m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;
     Ok(())

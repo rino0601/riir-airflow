@@ -1,5 +1,6 @@
 mod asgi_bridge;
 mod cli;
+mod executor;
 mod local_executor;
 mod native;
 mod python;

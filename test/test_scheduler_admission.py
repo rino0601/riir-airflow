@@ -23,7 +23,48 @@ with DAG("admission_probe", schedule=None, max_active_runs=1) as dag:
     work()
 """
 
-_SCHEDULER_PROBE = """\
+_HOLDING_WORKER = """\
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+json.load(sys.stdin)
+generation = sys.argv[-2]
+parent = os.getppid()
+for _ in range(500):
+    if os.getppid() != parent or Path(f"release-{generation}").exists():
+        break
+    time.sleep(0.02)
+"""
+
+_HOLDING_PROBE = """\
+from pathlib import Path
+
+def holding_workload(prepare, dto):
+    workload = prepare(dto)
+    if workload is None:
+        return None
+    generation, _, payload = workload
+    return generation, str(Path("holding_worker").resolve()), payload
+
+def hold_tasks(runner):
+    phases = runner.native_driver.phases
+    prepare = phases.prepare_workload
+    phases.prepare_workload = lambda dto: holding_workload(prepare, dto)
+
+def release_task(database, runner):
+    generation, = database.execute(
+        "SELECT generation FROM riir_attempt WHERE active = 1"
+    ).fetchone()
+    Path(f"release-{generation}").touch()
+    runner.native_driver.native.wait_for_task()
+"""
+
+_SCHEDULER_PROBE = (
+    _HOLDING_PROBE
+    + """\
 import sqlite3
 import sys
 from contextlib import closing
@@ -82,6 +123,7 @@ with create_session() as session:
     session.add(job)
 
 if not mode.endswith("baseline"):
+    hold_tasks(runner)
     driver = runner.native_driver
     phases = driver.phases
     prepare = phases.prepare_dag_runs
@@ -117,7 +159,14 @@ with closing(sqlite3.connect("airflow.db")) as database:
     assert older[2] is not None
     assert older[3] is None
     assert newer == ("newer", "queued", None, None)
-    assert [workload.ti.run_id for workload in queue.values()] == ["older"]
+    if mode == "native":
+        assert not queue
+        assert database.execute(
+            "SELECT t.run_id FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id "
+            "WHERE a.active = 1"
+        ).fetchone() == ("older",)
+    else:
+        assert [workload.ti.run_id for workload in queue.values()] == ["older"]
 
     with create_session() as session:
         assert runner._do_scheduling(session) == 0
@@ -129,7 +178,10 @@ with closing(sqlite3.connect("airflow.db")) as database:
     assert notifications[0][2] is not None
     assert selections == ([[older_id, newer_id]] if mode in ("native", "mixed-native") else [])
     assert claims == ([(older_id, "running")] if mode == "native" else [])
+    if mode == "native":
+        release_task(database, runner)
 """
+)
 
 
 @pytest.mark.parametrize(
@@ -153,7 +205,9 @@ with DAG("admission_probe", schedule=None, max_active_runs=2, max_active_tasks=1
     work.override(task_id="holder", priority_weight=1, pool="weighted")()
 """
 
-_TASK_PROBE = """\
+_TASK_PROBE = (
+    _HOLDING_PROBE
+    + """\
 import sqlite3
 import sys
 from contextlib import closing
@@ -175,7 +229,6 @@ from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 mode = sys.argv[1]
 selections = []
-claims = []
 job = Job()
 runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
 with create_session() as session:
@@ -229,26 +282,16 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
     if driver is not None:
         phases = driver.phases
-        prepare = phases.prepare_task
-        claimed = phases.task_claimed
+        prepare = phases.prepare_workload
 
         def observe_prepare(dto):
-            result = prepare(dto)
-            selections.append((dto["id"], result))
-            if not result:
-                print("UNSUPPORTED_DTO", dto)
-            return result
-
-        def observe_claim(dto):
             row = tasks()[dto["run_id"], dto["task_id"]]
-            assert row[1] == "scheduled"
-            assert row[2] is None and row[3] is None
-            result = claimed(dto)
-            claims.append((dto["id"], dto["state"]))
+            assert row[1:4] == ("scheduled", None, None)
+            result = holding_workload(prepare, dto)
+            selections.append((dto["id"], result is not None))
             return result
 
-        phases.prepare_task = observe_prepare
-        phases.task_claimed = observe_claim
+        phases.prepare_workload = observe_prepare
 
     def iteration():
         with create_session() as session:
@@ -259,31 +302,15 @@ with closing(sqlite3.connect("airflow.db")) as database:
         assert state == "queued"
         assert queued and queued <= updated
         assert owner == job_id
-        [(key, workload)] = queue.items()
-        assert key == runner.executor.get_workload_key(workload)
-        assert (workload.ti.run_id, workload.ti.task_id, workload.ti.id.hex) == (run, task, task_id)
-
-    if mode == "native":
-        class FailedHandoff(Exception):
-            pass
-
-        def fail_before_handoff(tis, executor, session):
-            assert [ti.id.hex for ti in tis] == [older_high_id]
-            raise FailedHandoff
-
-        with patch.object(runner, "_enqueue_task_instances_with_queued_state", fail_before_handoff):
-            try:
-                iteration()
-            except FailedHandoff:
-                pass
-            else:
-                raise AssertionError("scheduler did not reach executor handoff")
-        assert tasks()["older", "high"][1:4] == ("scheduled", None, None)
-        assert not queue
-        assert selections == [(older_high_id, True)], selections
-        assert claims == []
-        selections.clear()
-        claims.clear()
+        if mode == "native":
+            assert not queue
+            assert database.execute(
+                "SELECT id, job_id FROM riir_attempt WHERE active = 1"
+            ).fetchone() == (task_id, job_id)
+        else:
+            [(key, workload)] = queue.items()
+            assert key == runner.executor.get_workload_key(workload)
+            assert (workload.ti.run_id, workload.ti.task_id, workload.ti.id.hex) == (run, task, task_id)
 
     assert iteration() == 1
     assert_queued("older", "high")
@@ -295,30 +322,33 @@ with closing(sqlite3.connect("airflow.db")) as database:
     with create_session() as session:
         session.execute(update(Pool).where(Pool.pool == "weighted").values(include_deferred=False))
     assert iteration() == 0
-    assert len(queue) == 1
+    assert len(queue) == (0 if mode == "native" else 1)
     assert tasks()["older", "high"] == admitted
     assert tasks()["newer", "weighted"][1] == "scheduled"
 
     if mode == "fallback":
         assert selections == []
-        assert claims == []
     else:
-        queue.clear()
+        if mode == "native":
+            # Simulate the SDK's start transition before freeing the process slot.
+            with create_session() as session:
+                session.execute(update(TaskInstance).where(TaskInstance.run_id == "older", TaskInstance.task_id == "high")
+                                .values(state="running"))
+            release_task(database, runner)
+        else:
+            queue.clear()
         assert iteration() == 1
         assert_queued("newer", "weighted")
         assert tasks()["older", "weighted"][1] == "scheduled"
-        assert tasks()["older", "high"] == admitted
+        assert tasks()["older", "high"][2:4] == admitted[2:4]
 
-        queue.clear()
-        assert iteration() == 0
-        assert not queue
         if mode == "native":
+            assert iteration() == 0
             assert selections == [(older_high_id, True), (newer_weighted_id, True)], selections
-            assert claims == [(older_high_id, "queued"), (newer_weighted_id, "queued")], claims
-        else:
-            assert selections == []
-            assert claims == []
+            release_task(database, runner)
+        assert not queue or mode == "baseline"
 """
+)
 
 
 @pytest.mark.parametrize("mode", ["baseline", "native", "fallback"])
@@ -333,7 +363,9 @@ def test_sqlite_scheduler_admits_task_attempts(tmp_path: Path, mode: str):
     )
 
 
-_BOUNDARY_PROBE = """\
+_BOUNDARY_PROBE = (
+    _HOLDING_PROBE
+    + """\
 import sqlite3
 import subprocess
 import sys
@@ -374,6 +406,7 @@ trigger_dag(
     triggered_by=DagRunTriggeredByType.CLI,
 )
 driver = runner.native_driver
+hold_tasks(runner)
 phases = driver.phases
 
 def iteration():
@@ -445,77 +478,59 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             update(DagRun).where(DagRun.run_id == "probe").values(state="running")
         )
 
-    # A failed handoff rolls back the guarded claim and removes the workload.
-    with create_session() as session:
-        session.execute(
-            update(TaskInstance).where(TaskInstance.run_id == "probe")
-            .values(state="scheduled", queued_dttm=None, queued_by_job_id=None)
-        )
-    queue.clear()
-    runner.executor._task_coordinates.clear()
+    # A spawn failure compensates the committed claim without adding a queue entry.
+    release_task(observer, runner)
+    prepare = phases.prepare_workload
 
-    class FailedHandoff(Exception):
-        pass
+    def unavailable_program(dto):
+        generation, _, payload = prepare(dto)
+        return generation, "/missing/native-task-supervisor", payload
 
-    enqueue = runner._enqueue_task_instances_with_queued_state
-
-    def fail_after_queue(tis, executor, session):
-        enqueue(tis, executor, session=None)
-        raise FailedHandoff
-
-    with patch.object(runner, "_enqueue_task_instances_with_queued_state", fail_after_queue):
-        try:
-            iteration()
-        except FailedHandoff:
-            pass
-        else:
-            raise AssertionError("scheduler did not reach executor handoff")
+    with patch.object(phases, "prepare_workload", unavailable_program):
+        assert iteration() == 0
     assert state("probe", "work") == ("scheduled", None, None)
     assert not queue
-    assert not runner.executor._task_coordinates
+    assert observer.execute(
+        "SELECT count(*) FROM riir_attempt WHERE active = 1"
+    ).fetchone() == (0,)
 
-    # A committed claim is recovered exactly once after a simulated crash.
-    assert iteration() == 1
+    # Recover a #78-format queued attempt with a failed owner and no launch intent.
+    with create_session() as session:
+        session.execute(update(TaskInstance).where(TaskInstance.run_id == "probe")
+                        .values(state="queued", queued_dttm=timezone.utcnow(), queued_by_job_id=job.id))
+        session.execute(update(Job).where(Job.id == job.id).values(state="failed"))
     original = state("probe", "work")
-    assert original[0] == "queued"
-    queue.clear()
     new_job = Job(state="running")
     replacement = NativeSchedulerJobRunner(new_job)
+    hold_tasks(replacement)
     with create_session() as session:
-        session.execute(update(Job).where(Job.id == job.id).values(state="failed"))
         session.add(new_job)
-    replacement_queue = replacement.executor.executor_queues[WorkloadType.EXECUTE_TASK]
     assert replacement.adopt_or_reset_orphaned_tasks() == 1
-    assert len(replacement_queue) == 1
     assert state("probe", "work")[:2] == original[:2]
     assert state("probe", "work")[2] == new_job.id
     assert replacement.adopt_or_reset_orphaned_tasks() == 0
-    assert len(replacement_queue) == 1
-
-    # Repeated iterations cannot overwrite metadata or duplicate enqueue/notification.
     assert iteration() == 0
-    assert len(replacement_queue) == 1
     assert state("probe", "work")[:2] == original[:2]
+    release_task(observer, replacement)
 
-    # A running job with a stale heartbeat is failed and its queued task recovered.
+    # Recover another legacy queued attempt from an owner with a stale heartbeat.
+    with create_session() as session:
+        session.execute(update(TaskInstance).where(TaskInstance.run_id == "probe")
+                        .values(queued_by_job_id=new_job.id))
+        session.execute(update(Job).where(Job.id == new_job.id)
+                        .values(latest_heartbeat=timezone.utcnow() - timedelta(hours=1)))
     final_job = Job(state="running")
     final = NativeSchedulerJobRunner(final_job)
+    hold_tasks(final)
     with create_session() as session:
-        session.execute(
-            update(Job)
-            .where(Job.id == new_job.id)
-            .values(latest_heartbeat=timezone.utcnow() - timedelta(hours=1))
-        )
         session.add(final_job)
-    final_queue = final.executor.executor_queues[WorkloadType.EXECUTE_TASK]
     assert final.adopt_or_reset_orphaned_tasks() == 1
-    assert len(final_queue) == 1
     assert state("probe", "work")[2] == final_job.id
     assert observer.execute(
         "SELECT state FROM job WHERE id = ?", (new_job.id,)
     ).fetchone() == ("failed",)
     assert final.adopt_or_reset_orphaned_tasks() == 0
-    assert len(final_queue) == 1
+    release_task(observer, final)
 
     # An orphan outside the native subset is reset by Airflow and can be queued again.
     fallback_job = Job(state="running")
@@ -524,6 +539,8 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     with create_session() as session:
         session.execute(update(DagModel).where(DagModel.dag_id == "admission_probe")
                         .values(fail_fast=True))
+        session.execute(update(TaskInstance).where(TaskInstance.run_id == "probe")
+                        .values(queued_by_job_id=final_job.id))
         session.execute(
             update(Job).where(Job.id == final_job.id)
             .values(latest_heartbeat=timezone.utcnow() - timedelta(hours=1))
@@ -538,6 +555,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     assert state("probe", "work")[2] == fallback_job.id
     assert len(fallback_queue) == 1
 """
+)
 
 
 def test_native_scheduler_transaction_boundaries(tmp_path: Path):
@@ -589,7 +607,7 @@ def iteration():
         return runner._do_scheduling(session)
 
 run_prepare = phases.prepare_dag_runs
-task_prepare = phases.prepare_task
+task_prepare = phases.prepare_workload
 prepared = []
 native_task_claims = []
 phases.prepare_dag_runs = lambda dtos: (prepared.append("runs"), run_prepare(dtos))[1]
@@ -598,7 +616,7 @@ def observe_task(dto):
     native_task_claims.append(dto["id"])
     return task_prepare(dto)
 
-phases.prepare_task = observe_task
+phases.prepare_workload = observe_task
 
 with closing(sqlite3.connect("airflow.db")) as observer:
     def states():
@@ -703,7 +721,9 @@ def test_native_scheduler_delegates_with_listeners(tmp_path: Path):
     _run_probe(tmp_path, "native", _DAG, _LISTENER_PROBE)
 
 
-_RUNNER_PROBE = """\
+_RUNNER_PROBE = (
+    _HOLDING_PROBE
+    + """\
 import sqlite3
 from contextlib import closing
 from datetime import timedelta
@@ -734,12 +754,12 @@ def observe_dag(row):
     return read_dag(row)
 
 runner.scheduler_dag_bag._read_dag = observe_dag
+hold_tasks(runner)
 phases = runner.native_driver.phases
 for name, event in (
     ("prepare_dag_runs", "runs"),
     ("dag_run_claimed", "run-claim"),
-    ("prepare_task", "task"),
-    ("task_claimed", "task-claim"),
+    ("prepare_workload", "task"),
 ):
     original = getattr(phases, name)
     if name.endswith("runs"):
@@ -754,10 +774,10 @@ for name, event in (
 
 with create_session() as session:
     assert runner._do_scheduling(session) == 1
-assert calls == ["runs", "run-claim", "task", "task-claim"], calls
+assert calls == ["runs", "run-claim", "task"], calls
 with create_session() as session:
     assert runner._do_scheduling(session) == 0
-assert calls == ["runs", "run-claim", "task", "task-claim"], calls
+assert calls == ["runs", "run-claim", "task"], calls
 assert loaded_dags == ["admission_probe"], loaded_dags
 with closing(sqlite3.connect("airflow.db")) as database:
     assert database.execute(
@@ -766,7 +786,9 @@ with closing(sqlite3.connect("airflow.db")) as database:
     assert database.execute(
         "SELECT state, queued_by_job_id FROM task_instance WHERE task_id = 'work'"
     ).fetchone() == ("queued", job.id)
+    release_task(database, runner)
 """
+)
 
 
 def test_scheduler_entry_point_runner_calls_native_claims(tmp_path: Path):
@@ -813,12 +835,12 @@ with sqlite3.connect("airflow.db") as database:
     assert database.execute(
         "SELECT state FROM dag_run WHERE run_id = 'probe'"
     ).fetchone() == ("running",)
-    owner = database.execute(
-        "SELECT queued_dttm, queued_by_job_id FROM task_instance WHERE task_id = 'work'"
-    ).fetchone()
-    assert owner[0] is not None
     assert database.execute(
-        "SELECT state FROM job WHERE id = ?", (owner[1],)
+        "SELECT count(*) FROM riir_attempt"
+    ).fetchone() == (1,)
+    owner = database.execute("SELECT job_id FROM riir_attempt").fetchone()
+    assert database.execute(
+        "SELECT state FROM job WHERE id = ?", (owner[0],)
     ).fetchone() == ("success",)
 """
 
@@ -851,6 +873,9 @@ def _run_probe(tmp_path: Path, mode: str, dag_source: str, probe: str, **config:
     dags = tmp_path / "dags"
     dags.mkdir()
     (dags / "admission_probe.py").write_text(dag_source)
+    holding_worker = tmp_path / "holding_worker"
+    holding_worker.write_text(f"#!{sys.executable}\n{_HOLDING_WORKER}")
+    holding_worker.chmod(0o700)
     env = {
         name: value
         for name, value in os.environ.items()

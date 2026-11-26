@@ -117,3 +117,142 @@ pub(crate) fn start_manual_dag_run(
     )?;
     Ok(updated.getattr("rowcount")?.extract::<i64>()? == 1)
 }
+
+/// Choose at most one task for the single-slot executor. The boolean indicates
+/// whether this batch can be handled natively without changing Airflow's behavior.
+#[pyfunction]
+pub(crate) fn select_sqlite_task(
+    connection: &Bound<'_, PyAny>,
+    max_tis: i64,
+) -> PyResult<(bool, Option<String>)> {
+    use std::collections::HashMap;
+
+    let pool_rows = connection
+        .call_method1(
+            "exec_driver_sql",
+            ("SELECT p.pool, p.slots, coalesce(sum(t.pool_slots), 0)
+              FROM slot_pool AS p
+              LEFT JOIN task_instance AS t ON t.pool = p.pool AND t.working_set IS TRUE
+                  AND (t.state IN ('queued', 'running')
+                      OR (p.include_deferred AND t.state = 'deferred'))
+              GROUP BY p.pool, p.slots",),
+        )?
+        .call_method0("all")?;
+
+    let mut pools = HashMap::new();
+    let mut starved_pools = Vec::new();
+    let mut free = 0_i64;
+    for row in pool_rows.try_iter()? {
+        let row = row?;
+        let name: String = row.get_item(0)?.extract()?;
+        let total: i64 = row.get_item(1)?.extract()?;
+        let used: i64 = row.get_item(2)?.extract()?;
+        let open = if total == -1 {
+            i64::MAX
+        } else {
+            total.saturating_sub(used)
+        };
+        if open <= 0 {
+            starved_pools.push(name.clone());
+        }
+        free = free.saturating_add(open.max(0));
+        pools.insert(name, (total, open));
+    }
+
+    let limit = max_tis.min(free);
+    if limit <= 0 {
+        return Ok((true, None));
+    }
+
+    let mut starved_tasks = Vec::<(String, String)>::new();
+    loop {
+        let rows = connection
+            .call_method1(
+                "exec_driver_sql",
+                (
+                    "WITH active AS (
+                        SELECT dag_id, run_id, count(*) AS occupied
+                        FROM task_instance
+                        WHERE working_set IS TRUE AND state IN ('queued', 'running')
+                        GROUP BY dag_id, run_id
+                    ), ranked AS (
+                        SELECT t.id, t.dag_id, t.task_id, t.pool, t.pool_slots,
+                            (NOT coalesce(d.has_task_concurrency_limits, 0)
+                                AND t.executor IS NULL AND t.dag_version_id IS NOT NULL
+                                AND t.pool_slots > 0) AS supported,
+                            t.priority_weight, r.logical_date, t.region_index, d.max_active_tasks,
+                            row_number() OVER (
+                                PARTITION BY t.dag_id, t.run_id
+                                ORDER BY -t.priority_weight, r.logical_date, t.region_index
+                            ) AS rank
+                        FROM task_instance AS t
+                        JOIN dag_run AS r ON r.dag_id = t.dag_id AND r.run_id = t.run_id
+                        JOIN dag AS d ON d.dag_id = t.dag_id
+                        LEFT JOIN active AS a ON a.dag_id = t.dag_id AND a.run_id = t.run_id
+                        WHERE t.working_set IS TRUE AND t.state = 'scheduled'
+                            AND r.state = 'running' AND NOT d.is_paused AND d.bundle_name IS NOT NULL
+                            AND coalesce(a.occupied, 0) < d.max_active_tasks
+                            AND t.pool NOT IN (SELECT value FROM json_each(?))
+                            AND (t.dag_id, t.task_id) NOT IN (
+                                SELECT value ->> 0, value ->> 1 FROM json_each(?)
+                            )
+                    )
+                    SELECT id, dag_id, task_id, pool, pool_slots, supported
+                    FROM ranked WHERE rank <= max_active_tasks
+                    ORDER BY -priority_weight, logical_date, region_index LIMIT ?",
+                    (
+                        json!(starved_pools).to_string(),
+                        json!(starved_tasks).to_string(),
+                        limit,
+                    ),
+                ),
+            )?
+            .call_method0("all")?;
+
+        let mut selected = None;
+        for row in rows.try_iter()? {
+            let row = row?;
+            if row.get_item(5)?.extract::<i64>()? == 0 {
+                return Ok((false, None));
+            }
+            if selected.is_some() {
+                continue;
+            }
+            let pool: String = row.get_item(3)?.extract()?;
+            let slots: i64 = row.get_item(4)?.extract()?;
+            match pools.get(&pool) {
+                None => starved_pools.push(pool),
+                Some(&(total, open)) if (total != -1 && slots > total) || slots > open => {
+                    starved_tasks.push((row.get_item(1)?.extract()?, row.get_item(2)?.extract()?));
+                }
+                Some(_) => selected = Some(row.get_item(0)?.extract()?),
+            }
+        }
+        // Retry a full, entirely starved batch with the new filters applied
+        // before ranking, so lower-priority rows can enter the next batch.
+        if selected.is_some() || (rows.len()? as i64) < limit {
+            return Ok((true, selected));
+        }
+    }
+}
+
+/// Change only a live scheduled attempt. Airflow still owns the transaction
+/// and only builds an executor workload after this guarded update succeeds.
+#[pyfunction]
+pub(crate) fn queue_sqlite_task(
+    connection: &Bound<'_, PyAny>,
+    id: &str,
+    job_id: i64,
+    now: &str,
+) -> PyResult<bool> {
+    let updated = connection.call_method1(
+        "exec_driver_sql",
+        (
+            "UPDATE task_instance SET state = 'queued', queued_dttm = ?,
+                queued_by_job_id = ?, updated_at = ?
+            WHERE id = ? AND working_set IS TRUE AND state = 'scheduled'",
+            (now, job_id, now, id),
+        ),
+    )?;
+    Ok(updated.getattr("rowcount")?.extract::<i64>()? == 1)
+}

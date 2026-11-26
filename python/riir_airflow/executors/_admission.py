@@ -22,7 +22,6 @@ from riir_airflow import _lowlevel
 
 if TYPE_CHECKING:
     from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
-    from sqlalchemy.engine import Connection
     from sqlalchemy.orm import Session
 
 
@@ -60,15 +59,16 @@ def install_admission(executor_type: type) -> None:
     runner_type._start_queued_dagruns = start
 
 
-def _admission_connection(session: Session, mapper: type) -> Connection:
+def _admission_connection(session: Session, mapper: type) -> sqlite3.Connection:
     connection = session.connection(bind_arguments={"mapper": mapper})
     # SQLite's legacy driver mode does not start a transaction for a SELECT.
     # Keep the candidate snapshot and claims under the same write reservation.
     # If Airflow already started a transaction, use it as-is.
-    if not connection.connection.driver_connection.in_transaction:
-        connection.exec_driver_sql("BEGIN IMMEDIATE")
+    driver = connection.connection.driver_connection
+    if not driver.in_transaction:
+        driver.execute("BEGIN IMMEDIATE")
     session.flush()
-    return connection
+    return driver
 
 
 def _admit_manual_runs(runner: SchedulerJobRunner, session: Session) -> bool:

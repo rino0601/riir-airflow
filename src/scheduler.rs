@@ -55,7 +55,7 @@ pub(crate) fn manual_dag_run_candidates(
 ) -> PyResult<Option<Vec<i64>>> {
     let rows = connection
         .call_method1(
-            "exec_driver_sql",
+            "execute",
             (
                 "WITH running AS (
                     SELECT dag_id, backfill_id, count(*) AS num_running
@@ -79,7 +79,7 @@ pub(crate) fn manual_dag_run_candidates(
                 (limit,),
             ),
         )?
-        .call_method0("all")?;
+        .call_method0("fetchall")?;
 
     let mut candidates = Vec::new();
     for row in rows.try_iter()? {
@@ -102,7 +102,7 @@ pub(crate) fn start_manual_dag_run(
     now: &str,
 ) -> PyResult<bool> {
     let updated = connection.call_method1(
-        "exec_driver_sql",
+        "execute",
         (
             "UPDATE dag_run AS r
             SET state = 'running', start_date = ?, end_date = NULL, updated_at = ?
@@ -129,7 +129,7 @@ pub(crate) fn select_sqlite_task(
 
     let pool_rows = connection
         .call_method1(
-            "exec_driver_sql",
+            "execute",
             ("SELECT p.pool, p.slots, coalesce(sum(t.pool_slots), 0)
               FROM slot_pool AS p
               LEFT JOIN task_instance AS t ON t.pool = p.pool AND t.working_set IS TRUE
@@ -137,7 +137,7 @@ pub(crate) fn select_sqlite_task(
                       OR (p.include_deferred AND t.state = 'deferred'))
               GROUP BY p.pool, p.slots",),
         )?
-        .call_method0("all")?;
+        .call_method0("fetchall")?;
 
     let mut pools = HashMap::new();
     let mut starved_pools = Vec::new();
@@ -168,7 +168,7 @@ pub(crate) fn select_sqlite_task(
     loop {
         let rows = connection
             .call_method1(
-                "exec_driver_sql",
+                "execute",
                 (
                     "WITH active AS (
                         SELECT dag_id, run_id, count(*) AS occupied
@@ -207,7 +207,7 @@ pub(crate) fn select_sqlite_task(
                     ),
                 ),
             )?
-            .call_method0("all")?;
+            .call_method0("fetchall")?;
 
         let mut selected = None;
         for row in rows.try_iter()? {
@@ -246,7 +246,7 @@ pub(crate) fn queue_sqlite_task(
     now: &str,
 ) -> PyResult<bool> {
     let updated = connection.call_method1(
-        "exec_driver_sql",
+        "execute",
         (
             "UPDATE task_instance SET state = 'queued', queued_dttm = ?,
                 queued_by_job_id = ?, updated_at = ?

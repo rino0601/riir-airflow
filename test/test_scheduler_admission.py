@@ -44,17 +44,21 @@ from riir_airflow import _lowlevel
 mode = sys.argv[1]
 selections = []
 claims = []
+claim_connections = []
 notifications = []
 select_candidates = _lowlevel.manual_dag_run_candidates
 claim_run = _lowlevel.start_manual_dag_run
 notify = DagRun.notify_dagrun_state_changed
 
 def observe_candidates(connection, limit):
+    assert isinstance(connection, sqlite3.Connection)
     candidates = select_candidates(connection, limit)
     selections.append(candidates)
     return candidates
 
 def observe_claim(connection, run_id, now):
+    assert isinstance(connection, sqlite3.Connection)
+    claim_connections.append(connection)
     claimed = claim_run(connection, run_id, now)
     claims.append((run_id, claimed))
     return claimed
@@ -107,6 +111,7 @@ with closing(sqlite3.connect("airflow.db")) as database:
         # but a rollback keeps it out of committed metadata.
         with create_session() as session:
             runner._start_queued_dagruns(session)
+            assert claim_connections[-1] is session.connection().connection.driver_connection
             run = session.get(DagRun, older_id)
             assert run.state == "running"
             assert run.start_date is not None
@@ -230,15 +235,19 @@ from riir_airflow import _lowlevel
 mode = sys.argv[1]
 selections = []
 claims = []
+claim_connections = []
 select_task = _lowlevel.select_sqlite_task
 queue_task = _lowlevel.queue_sqlite_task
 
 def observe_selection(connection, limit):
+    assert isinstance(connection, sqlite3.Connection)
     result = select_task(connection, limit)
     selections.append((limit, result))
     return result
 
 def observe_claim(connection, task_id, job_id, now):
+    assert isinstance(connection, sqlite3.Connection)
+    claim_connections.append(connection)
     claimed = queue_task(connection, task_id, job_id, now)
     claims.append((task_id, claimed))
     if claimed:
@@ -316,9 +325,11 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
         def fail_before_handoff(tis, executor, session):
             assert [ti.id.hex for ti in tis] == [older_high_id]
-            state, owner = session.connection().exec_driver_sql(
+            driver = session.connection().connection.driver_connection
+            assert driver is claim_connections[-1]
+            state, owner = driver.execute(
                 "SELECT state, queued_by_job_id FROM task_instance WHERE id = ?", (older_high_id,)
-            ).one()
+            ).fetchone()
             assert (state, owner) == ("queued", job_id)
             assert tasks()["older", "high"][1:4] == ("scheduled", None, None)
             raise FailedHandoff

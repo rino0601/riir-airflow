@@ -5,7 +5,6 @@ from airflow.executors.local_executor import LocalExecutor
 from airflow.executors.workloads import WorkloadType
 
 from riir_airflow._lowlevel import drain_local_commands
-from riir_airflow.executors._admission import install_admission
 
 if TYPE_CHECKING:
     from airflow.models.taskinstancekey import TaskInstanceKey
@@ -23,7 +22,6 @@ class AsgiExecutor(LocalExecutor):
     def __init__(self):
         super().__init__(parallelism=1)
         self.commands_to_run = []
-        install_admission(AsgiExecutor)
 
     def execute_async(
         self,

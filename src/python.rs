@@ -140,10 +140,7 @@ fn _lowlevel(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(health_response, m)?)?;
     m.add_function(wrap_pyfunction!(parse_cli, m)?)?;
     m.add_function(wrap_pyfunction!(scheduler_status, m)?)?;
-    m.add_function(wrap_pyfunction!(scheduler::manual_dag_run_candidates, m)?)?;
-    m.add_function(wrap_pyfunction!(scheduler::start_manual_dag_run, m)?)?;
-    m.add_function(wrap_pyfunction!(scheduler::select_sqlite_task, m)?)?;
-    m.add_function(wrap_pyfunction!(scheduler::queue_sqlite_task, m)?)?;
+    m.add_class::<scheduler::NativeScheduler>()?;
     m.add_function(wrap_pyfunction!(settings_mode, m)?)?;
     m.add_function(wrap_pyfunction!(serve_native, m)?)?;
     Ok(())

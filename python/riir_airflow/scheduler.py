@@ -21,13 +21,11 @@ from airflow.listeners.listener import get_listener_manager
 from airflow.models.dag import DagModel
 from airflow.models.dag_version import DagVersion
 from airflow.models.dagrun import DagRun
-from airflow.models.serialized_dag import SerializedDagModel
 from airflow.models.taskinstance import TaskInstance
 from airflow.sdk import timezone
 from airflow.utils.log.task_log_address import SENTINEL_REGION_ID
 from airflow.utils.session import NEW_SESSION, create_session
 from airflow.utils.state import TaskInstanceState
-from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import make_transient
 
@@ -135,8 +133,6 @@ class SchedulerPhases:
 
     def __init__(self, runner: SchedulerJobRunner):
         self.runner = runner
-        self._dag_by_version: dict[UUID, object] = {}
-        self._dag_by_id: dict[str, object] = {}
         self._runs: dict[int, DagRun] = {}
         self._pending_ti: TaskInstance | None = None
         self._pending_before: set[object] | None = None
@@ -151,24 +147,6 @@ class SchedulerPhases:
                 if self.runner._scheduler_use_job_schedule:
                     self.runner._create_dagruns_for_dags(guard, session)
                 guard.commit()
-        self._warm_dag_cache()
-
-    def _warm_dag_cache(self) -> None:
-        with create_session() as session:
-            rows = session.scalars(select(SerializedDagModel)).all()
-        for row in rows:
-            dag = self.dag_bag._read_dag(row)
-            if dag is None:
-                continue
-            version = _uuid(str(row.dag_version_id))
-            if version is not None:
-                self._dag_by_version[version] = dag
-            current = self._dag_by_id.get(row.dag_id)
-            if current is None or row.created_at > getattr(
-                current, "_riir_created_at", row.created_at
-            ):
-                dag._riir_created_at = row.created_at
-                self._dag_by_id[row.dag_id] = dag
 
     def prepare_dag_runs(self, dtos: list[dict]) -> bool:
         if any(
@@ -366,38 +344,13 @@ class SchedulerPhases:
         self._pending_ti = None
 
     def _load_dag(self, dag_id: str, version: UUID | None):
-        dag = self._dag_by_version.get(version) if version else None
-        if dag is None:
-            dag = self._latest(dag_id)
-        if dag is not None:
-            return dag
-        statement = select(SerializedDagModel).where(
-            SerializedDagModel.dag_id == dag_id
-        )
-        with create_session() as session:
-            row = session.scalar(
-                statement.where(SerializedDagModel.dag_version_id == version)
-                if version is not None
-                else statement
-            )
-            if row is None:
-                row = session.scalar(
-                    statement.order_by(SerializedDagModel.created_at.desc())
-                )
-        if row is None:
-            return None
-        dag = self.dag_bag._read_dag(row)
-        if dag is None:
-            return None
-        row_version = _uuid(str(row.dag_version_id))
-        if row_version is not None:
-            self._dag_by_version[row_version] = dag
-        dag._riir_created_at = row.created_at
-        self._dag_by_id[dag_id] = dag
-        return dag
-
-    def _latest(self, dag_id: str):
-        return self._dag_by_id.get(dag_id)
+        with create_session(scoped=False) as session:
+            if version is None:
+                latest = DagVersion.get_latest_version(dag_id, session=session)
+                if latest is None:
+                    return None
+                version = latest.id
+            return self.dag_bag.get_dag(version, session=session)
 
 
 class NativeSchedulerJobRunner(SchedulerJobRunner):

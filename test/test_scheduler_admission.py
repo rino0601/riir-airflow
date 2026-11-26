@@ -726,6 +726,14 @@ trigger_dag(
     triggered_by=DagRunTriggeredByType.CLI,
 )
 calls = []
+loaded_dags = []
+read_dag = runner.scheduler_dag_bag._read_dag
+
+def observe_dag(row):
+    loaded_dags.append(row.dag_id)
+    return read_dag(row)
+
+runner.scheduler_dag_bag._read_dag = observe_dag
 phases = runner.native_driver.phases
 for name, event in (
     ("prepare_dag_runs", "runs"),
@@ -750,6 +758,7 @@ assert calls == ["runs", "run-claim", "task", "task-claim"], calls
 with create_session() as session:
     assert runner._do_scheduling(session) == 0
 assert calls == ["runs", "run-claim", "task", "task-claim"], calls
+assert loaded_dags == ["admission_probe"], loaded_dags
 with closing(sqlite3.connect("airflow.db")) as database:
     assert database.execute(
         "SELECT state FROM dag_run WHERE run_id = 'probe'"
@@ -761,7 +770,18 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 
 def test_scheduler_entry_point_runner_calls_native_claims(tmp_path: Path):
-    _run_probe(tmp_path, "native", _DAG, _RUNNER_PROBE)
+    dag_source = (
+        _DAG
+        + """
+with DAG("unrelated_probe", schedule=None):
+    @task
+    def unrelated():
+        pass
+
+    unrelated()
+"""
+    )
+    _run_probe(tmp_path, "native", dag_source, _RUNNER_PROBE)
 
 
 _ENTRYPOINT_PROBE = """\

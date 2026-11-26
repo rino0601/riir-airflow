@@ -5,12 +5,11 @@ from __future__ import annotations
 import json
 import pickle
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from datetime import timezone as dt_timezone
-from functools import lru_cache, partial
+from functools import cached_property, lru_cache, partial
 from pathlib import Path
 from typing import TYPE_CHECKING
-from urllib.parse import unquote, urlsplit
 from uuid import UUID
 
 from airflow import __version__
@@ -29,6 +28,7 @@ from airflow.utils.log.task_log_address import SENTINEL_REGION_ID
 from airflow.utils.session import NEW_SESSION, create_session
 from airflow.utils.state import TaskInstanceState
 from sqlalchemy import select
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import make_transient
 
 from riir_airflow import _lowlevel
@@ -54,31 +54,36 @@ def _uuid(value: str | None) -> UUID | None:
 
 
 def _database_path() -> Path:
-    url = conf.get("database", "sql_alchemy_conn")
-    parsed = urlsplit(url)
-    if parsed.scheme != "sqlite":
-        raise ValueError("native scheduler requires SQLite")
-    path = unquote(parsed.path)
-    if path.startswith("//"):
-        path = path[1:]
-    return Path(path)
+    url = make_url(conf.get("database", "sql_alchemy_conn"))
+    if (
+        url.get_backend_name() != "sqlite"
+        or not url.database
+        or url.database == ":memory:"
+        or str(url.query.get("uri", "")).lower() in {"true", "yes", "on", "1"}
+    ):
+        raise ValueError("native scheduler requires a file-backed SQLite database")
+    return Path(url.database)
 
 
 class NativeSchedulerDriver:
     """Run one Airflow scheduling iteration with Rust-owned SQLite claims."""
 
-    def __init__(self, runner: SchedulerJobRunner, database: Path | str | None = None):
+    def __init__(self, runner: SchedulerJobRunner):
         self.runner = runner
         self.phases = SchedulerPhases(runner)
-        path = _database_path() if database is None else Path(database)
-        self.native = _lowlevel.NativeScheduler(str(path))
+
+    @cached_property
+    def native(self):
+        return _lowlevel.NativeScheduler(str(_database_path()))
 
     def supported(self) -> bool:
         if __version__ != "3.4.0":
             return False
         if self.runner._multi_team:
             return False
-        if conf.get("database", "sql_alchemy_conn").split(":", 1)[0] != "sqlite":
+        try:
+            _database_path()
+        except ValueError:
             return False
         executor = self.runner.executor
         if (
@@ -110,8 +115,15 @@ class NativeSchedulerDriver:
     def recover_queued_workloads(self) -> int:
         if not self.supported():
             return 0
+        threshold = conf.getint("scheduler", "scheduler_health_check_threshold")
+        stale_before = (timezone.utcnow() - timedelta(seconds=threshold)).strftime(
+            "%Y-%m-%d %H:%M:%S.%f"
+        )
         return self.native.recover_queued_workloads(
-            self.phases, self.runner.job.id, self.runner.executor.slots_available
+            self.phases,
+            self.runner.job.id,
+            self.runner.executor.slots_available,
+            stale_before,
         )
 
 
@@ -124,7 +136,7 @@ class SchedulerPhases:
         self._dag_by_id: dict[str, object] = {}
         self._runs: dict[int, DagRun] = {}
         self._pending_ti: TaskInstance | None = None
-        self._pending_key: object | None = None
+        self._pending_before: set[object] | None = None
 
     @property
     def dag_bag(self) -> DBDagBag:
@@ -230,7 +242,17 @@ class SchedulerPhases:
 
     def delegate_iteration(self) -> int:
         with create_session() as session:
-            return self.runner._do_scheduling(session)
+            return SchedulerJobRunner._do_scheduling(self.runner, session)
+
+    def delegate_after_run_creation(self) -> int:
+        with create_session() as session:
+            with prohibit_commit(session) as guard:
+                self.runner._start_queued_dagruns(session)
+                guard.commit()
+        self.between_phases()
+        if self.runner.executor.slots_available <= 0:
+            return 0
+        return self.delegate_task_phase()
 
     def delegate_task_phase(self) -> int:
         with create_session() as session:
@@ -238,6 +260,7 @@ class SchedulerPhases:
 
     def prepare_task(self, dto: dict) -> bool:
         self._pending_ti = None
+        self._pending_before = None
         if (
             dto["fail_fast"]
             or dto["has_task_concurrency_limits"]
@@ -318,33 +341,25 @@ class SchedulerPhases:
         if ti is None:
             return False
         queue = self.runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
-        before = set(queue)
-        try:
-            ti.state = dto["state"]
-            ti.queued_dttm = _datetime(dto["queued_dttm"])
-            ti.queued_by_job_id = dto["queued_by_job_id"]
-            ti.updated_at = _datetime(dto["updated_at"])
-            ti.emit_state_change_metric(TaskInstanceState.QUEUED)
-            self.runner._enqueue_task_instances_with_queued_state(
-                [ti], self.runner.executor, session=None
-            )
-        except Exception:
-            self.discard_pending_workload()
-            raise
-        added = set(queue) - before
-        if len(added) == 1:
-            self._pending_key = added.pop()
-        return True
+        self._pending_before = set(queue)
+        ti.state = dto["state"]
+        ti.queued_dttm = _datetime(dto["queued_dttm"])
+        ti.queued_by_job_id = dto["queued_by_job_id"]
+        ti.updated_at = _datetime(dto["updated_at"])
+        ti.emit_state_change_metric(TaskInstanceState.QUEUED)
+        self.runner._enqueue_task_instances_with_queued_state(
+            [ti], self.runner.executor, session=None
+        )
+        return len(set(queue) - self._pending_before) == 1
 
     def discard_pending_workload(self) -> None:
-        if self._pending_key is not None:
-            queue = self.runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
-            queue.pop(self._pending_key, None)
-            if self._pending_ti is not None:
-                self.runner.executor._task_coordinates.pop(
-                    TaskInstanceUuid(self._pending_ti.id), None
-                )
-        self._pending_key = None
+        if self._pending_before is not None and self._pending_ti is not None:
+            executor = self.runner.executor
+            queue = executor.executor_queues[WorkloadType.EXECUTE_TASK]
+            for key in set(queue) - self._pending_before:
+                queue.pop(key)
+            executor._task_coordinates.pop(TaskInstanceUuid(self._pending_ti.id), None)
+        self._pending_before = None
         self._pending_ti = None
 
     def _load_dag(self, dag_id: str, version: UUID | None):

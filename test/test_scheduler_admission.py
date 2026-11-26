@@ -39,13 +39,12 @@ from airflow.utils.session import create_session
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
 from sqlalchemy import update
 
-from riir_airflow.scheduler import NativeSchedulerDriver
+from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 mode = sys.argv[1]
 selections = []
 claims = []
 notifications = []
-driver = None if mode.endswith("baseline") else None
 
 def observe_notification(run, msg):
     notifications.append((run.run_id, run.state, run.start_date, run.end_date, msg))
@@ -78,12 +77,12 @@ def runs(database):
     ).fetchall()
 
 job = Job()
-runner = SchedulerJobRunner(job)
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
 with create_session() as session:
     session.add(job)
 
 if not mode.endswith("baseline"):
-    driver = NativeSchedulerDriver(runner, database="airflow.db")
+    driver = runner.native_driver
     phases = driver.phases
     prepare = phases.prepare_dag_runs
     claimed = phases.dag_run_claimed
@@ -100,8 +99,6 @@ if not mode.endswith("baseline"):
     phases.dag_run_claimed = observe_claim
 
 def iteration():
-    if driver is not None:
-        return driver.run_iteration()
     with create_session() as session:
         return runner._do_scheduling(session)
 
@@ -174,13 +171,13 @@ from airflow.utils.session import create_session
 from airflow.utils.types import DagRunTriggeredByType
 from sqlalchemy import update
 
-from riir_airflow.scheduler import NativeSchedulerDriver
+from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 mode = sys.argv[1]
 selections = []
 claims = []
 job = Job()
-runner = SchedulerJobRunner(job)
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
 with create_session() as session:
     session.add(job)
     session.add(Pool(pool="weighted", slots=2, include_deferred=True))
@@ -197,7 +194,7 @@ for run_id, logical_date in [("newer", now), ("older", now - timedelta(minutes=1
 # Let upstream resolve dependencies and produce the scheduled attempts.
 with patch.object(runner, "_parallelism", 0):
     with create_session() as session:
-        runner._do_scheduling(session)
+        SchedulerJobRunner._do_scheduling(runner, session)
 
 with create_session() as session:
     session.execute(
@@ -215,7 +212,7 @@ with create_session() as session:
         )
 
 queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
-driver = None if mode == "baseline" else NativeSchedulerDriver(runner, database="airflow.db")
+driver = None if mode == "baseline" else runner.native_driver
 
 with closing(sqlite3.connect("airflow.db")) as database:
     def tasks():
@@ -254,8 +251,6 @@ with closing(sqlite3.connect("airflow.db")) as database:
         phases.task_claimed = observe_claim
 
     def iteration():
-        if driver is not None:
-            return driver.run_iteration()
         with create_session() as session:
             return runner._do_scheduling(session)
 
@@ -347,7 +342,6 @@ from unittest.mock import patch
 from airflow.api.common.trigger_dag import trigger_dag
 from airflow.executors.workloads import WorkloadType
 from airflow.jobs.job import Job
-from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.sdk import timezone
@@ -355,7 +349,7 @@ from airflow.utils.session import create_session
 from airflow.utils.types import DagRunTriggeredByType
 from sqlalchemy import update
 
-from riir_airflow.scheduler import NativeSchedulerDriver, NativeSchedulerJobRunner
+from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 _LOCKER = (
     "import sqlite3, sys\\n"
@@ -368,7 +362,7 @@ _LOCKER = (
 )
 
 job = Job()
-runner = SchedulerJobRunner(job)
+runner = NativeSchedulerJobRunner(job)
 with create_session() as session:
     session.add(job)
 
@@ -376,8 +370,13 @@ trigger_dag(
     "admission_probe", run_id="probe", run_after=timezone.utcnow() - timedelta(minutes=1),
     triggered_by=DagRunTriggeredByType.CLI,
 )
-driver = NativeSchedulerDriver(runner, database="airflow.db")
+driver = runner.native_driver
 phases = driver.phases
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
 queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
 events = []
 prepare_calls = []
@@ -407,7 +406,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     phases.prepare_dag_runs = observe_prepare
     phases.dag_run_claimed = observe_run_claim
 
-    assert driver.run_iteration() == 1
+    assert iteration() == 1
     assert observer.execute("SELECT state FROM dag_run WHERE run_id = 'probe'").fetchone() == ("running",)
     assert state("probe", "work")[0] == "queued"
 
@@ -428,7 +427,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
         with patch.object(phases, "before_runs", lambda: None), patch.object(
             phases, "between_phases", lambda: None
         ):
-            assert driver.run_iteration() == 0
+            assert iteration() == 0
         assert prepare_calls == [], prepare_calls
         assert observer.execute(
             "SELECT state FROM dag_run WHERE run_id = 'probe'"
@@ -450,6 +449,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             .values(state="scheduled", queued_dttm=None, queued_by_job_id=None)
         )
     queue.clear()
+    runner.executor._task_coordinates.clear()
 
     class FailedHandoff(Exception):
         pass
@@ -462,24 +462,25 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 
     with patch.object(runner, "_enqueue_task_instances_with_queued_state", fail_after_queue):
         try:
-            driver.run_iteration()
+            iteration()
         except FailedHandoff:
             pass
         else:
             raise AssertionError("scheduler did not reach executor handoff")
     assert state("probe", "work") == ("scheduled", None, None)
     assert not queue
+    assert not runner.executor._task_coordinates
 
     # A committed claim is recovered exactly once after a simulated crash.
-    assert driver.run_iteration() == 1
+    assert iteration() == 1
     original = state("probe", "work")
     assert original[0] == "queued"
     queue.clear()
     new_job = Job(state="running")
+    replacement = NativeSchedulerJobRunner(new_job)
     with create_session() as session:
         session.execute(update(Job).where(Job.id == job.id).values(state="failed"))
         session.add(new_job)
-    replacement = NativeSchedulerJobRunner(new_job)
     replacement_queue = replacement.executor.executor_queues[WorkloadType.EXECUTE_TASK]
     assert replacement.adopt_or_reset_orphaned_tasks() == 1
     assert len(replacement_queue) == 1
@@ -489,9 +490,30 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     assert len(replacement_queue) == 1
 
     # Repeated iterations cannot overwrite metadata or duplicate enqueue/notification.
-    assert driver.run_iteration() == 0
+    assert iteration() == 0
     assert len(replacement_queue) == 1
     assert state("probe", "work")[:2] == original[:2]
+
+    # A running job with a stale heartbeat is failed and its queued task recovered.
+    final_job = Job(state="running")
+    final = NativeSchedulerJobRunner(final_job)
+    with create_session() as session:
+        session.execute(
+            update(Job)
+            .where(Job.id == new_job.id)
+            .values(latest_heartbeat=timezone.utcnow() - timedelta(hours=1))
+        )
+        session.add(final_job)
+    final_queue = final.executor.executor_queues[WorkloadType.EXECUTE_TASK]
+    assert final.adopt_or_reset_orphaned_tasks() == 1
+    assert len(final_queue) == 1
+    assert state("probe", "work")[2] == final_job.id
+    with closing(sqlite3.connect("airflow.db")) as observer:
+        assert observer.execute(
+            "SELECT state FROM job WHERE id = ?", (new_job.id,)
+        ).fetchone() == ("failed",)
+    assert final.adopt_or_reset_orphaned_tasks() == 0
+    assert len(final_queue) == 1
 """
 
 
@@ -508,7 +530,6 @@ from datetime import timedelta
 
 from airflow.api.common.trigger_dag import trigger_dag
 from airflow.jobs.job import Job
-from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.sdk import timezone
@@ -516,10 +537,10 @@ from airflow.utils.session import create_session
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
 from sqlalchemy import update
 
-from riir_airflow.scheduler import NativeSchedulerDriver
+from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 job = Job()
-runner = SchedulerJobRunner(job)
+runner = NativeSchedulerJobRunner(job)
 with create_session() as session:
     session.add(job)
 
@@ -537,8 +558,13 @@ with create_session() as session:
         update(DagRun).where(DagRun.run_id == "mixed").values(run_type=DagRunType.SCHEDULED)
     )
 
-driver = NativeSchedulerDriver(runner, database="airflow.db")
+driver = runner.native_driver
 phases = driver.phases
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
 run_prepare = phases.prepare_dag_runs
 task_prepare = phases.prepare_task
 prepared = []
@@ -557,7 +583,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             "SELECT run_id, state FROM dag_run WHERE dag_id = 'admission_probe'"
         ))
 
-    assert driver.run_iteration() == 1
+    assert iteration() == 1
     current = states()
     assert prepared == ["runs"]
     assert list(current.values()).count("running") == 1
@@ -580,7 +606,7 @@ with create_session() as session:
 runner.executor.executor_queues.clear()
 runner.executor._task_coordinates.clear()
 prepared.clear()
-assert driver.run_iteration() == 1
+assert iteration() == 1
 assert prepared == []
 assert native_task_claims == []
 with closing(sqlite3.connect("airflow.db")) as observer:
@@ -601,14 +627,13 @@ from datetime import timedelta
 
 from airflow.api.common.trigger_dag import trigger_dag
 from airflow.jobs.job import Job
-from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
 from airflow.listeners import hookimpl
 from airflow.listeners.listener import get_listener_manager
 from airflow.sdk import timezone
 from airflow.utils.session import create_session
 from airflow.utils.types import DagRunTriggeredByType
 
-from riir_airflow.scheduler import NativeSchedulerDriver
+from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 notifications = []
 native_prepare = []
@@ -621,7 +646,7 @@ class ProbeListener:
 get_listener_manager().add_listener(ProbeListener())
 
 job = Job()
-runner = SchedulerJobRunner(job)
+runner = NativeSchedulerJobRunner(job)
 with create_session() as session:
     session.add(job)
 trigger_dag(
@@ -629,14 +654,17 @@ trigger_dag(
     run_after=timezone.utcnow() - timedelta(minutes=1),
     triggered_by=DagRunTriggeredByType.CLI,
 )
-driver = NativeSchedulerDriver(runner, database="airflow.db")
+driver = runner.native_driver
 assert not driver.supported()
+assert "native" not in vars(driver)
 phases = driver.phases
 prepare = phases.prepare_dag_runs
 phases.prepare_dag_runs = lambda dtos: (native_prepare.append(dtos), prepare(dtos))[1]
 
-assert driver.run_iteration() == 1
+with create_session() as session:
+    assert runner._do_scheduling(session) == 1
 assert native_prepare == []
+assert "native" not in vars(driver)
 assert notifications == [("probe", "running", "started")]
 with closing(sqlite3.connect("airflow.db")) as database:
     assert database.execute(
@@ -761,6 +789,18 @@ def test_python_module_scheduler_entry_point(tmp_path: Path):
         AIRFLOW__SCHEDULER__NUM_RUNS="1",
         AIRFLOW__CORE__UNIT_TEST_MODE="True",
     )
+
+
+def test_database_path_keeps_relative_sqlite_url(monkeypatch):
+    from airflow.configuration import conf
+    from riir_airflow.scheduler import _database_path
+
+    monkeypatch.setattr(conf, "get", lambda *args, **kwargs: "sqlite:///airflow.db")
+    assert _database_path() == Path("airflow.db")
+    monkeypatch.setattr(
+        conf, "get", lambda *args, **kwargs: "sqlite:////tmp/airflow.db"
+    )
+    assert _database_path() == Path("/tmp/airflow.db")
 
 
 def _run_probe(tmp_path: Path, mode: str, dag_source: str, probe: str, **config: str):

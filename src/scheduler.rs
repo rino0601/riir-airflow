@@ -273,7 +273,7 @@ impl NativeScheduler {
         match status.as_str() {
             "fallback" => {
                 return phases
-                    .call_method0("delegate_iteration")?
+                    .call_method0("delegate_after_run_creation")?
                     .extract::<usize>();
             }
             "locked" => return Ok(0),
@@ -297,6 +297,7 @@ impl NativeScheduler {
         phases: &Bound<'_, PyAny>,
         job_id: i64,
         limit: i64,
+        stale_before: &str,
     ) -> PyResult<usize> {
         let py = phases.py();
         let transaction = match self
@@ -307,6 +308,14 @@ impl NativeScheduler {
             Err(error) if is_busy(&error) => return Ok(0),
             Err(error) => return Err(sql_error(error)),
         };
+        transaction
+            .execute(
+                "UPDATE job SET state = 'failed'
+                WHERE job_type = 'SchedulerJob' AND state = 'running'
+                    AND latest_heartbeat < ?1",
+                params![stale_before],
+            )
+            .map_err(sql_error)?;
         let sql = format!(
             "SELECT {TASK_COLUMNS}
             FROM task_instance AS t
@@ -351,11 +360,7 @@ impl NativeScheduler {
             return Ok(0);
         }
         dto.set_item("queued_by_job_id", job_id)?;
-        if let Err(error) = phases.call_method1("task_claimed", (dto,)) {
-            let _ = phases.call_method0("discard_pending_workload");
-            return Err(error);
-        }
-        transaction.commit().map_err(sql_error)?;
+        commit_workload(transaction, phases, dto)?;
         Ok(1)
     }
 
@@ -602,16 +607,28 @@ impl NativeScheduler {
             claimed.set_item("queued_by_job_id", job_id)?;
             claimed.set_item("updated_at", now)?;
         }
-        if let Err(error) = phases.call_method1("task_claimed", (dto,)) {
-            let _ = phases.call_method0("discard_pending_workload");
-            return Err(error);
-        }
-        if let Err(error) = transaction.commit() {
-            let _ = phases.call_method0("discard_pending_workload");
-            return Err(sql_error(error));
-        }
+        commit_workload(transaction, phases, dto)?;
         Ok(("committed".into(), 1))
     }
+}
+
+fn commit_workload(
+    transaction: rusqlite::Transaction<'_>,
+    phases: &Bound<'_, PyAny>,
+    dto: Bound<'_, PyDict>,
+) -> PyResult<()> {
+    let result = (|| {
+        if !phases.call_method1("task_claimed", (dto,))?.is_truthy()? {
+            return Err(PyRuntimeError::new_err(
+                "executor did not enqueue one workload",
+            ));
+        }
+        transaction.commit().map_err(sql_error)
+    })();
+    if result.is_err() {
+        let _ = phases.call_method0("discard_pending_workload");
+    }
+    result
 }
 
 fn pool_capacity(

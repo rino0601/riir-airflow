@@ -191,6 +191,205 @@ def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path, mode: str):
     _run_probe(tmp_path, mode, _DAG, _SCHEDULER_PROBE)
 
 
+_SCHEDULE_DAG = """\
+from datetime import datetime
+
+from airflow.sdk import DAG, task
+
+with DAG(
+    "schedule_probe",
+    schedule="@daily",
+    start_date=datetime(2026, 1, 1),
+    catchup=True,
+    max_active_runs=1,
+) as dag:
+    @task
+    def work():
+        pass
+
+    work()
+"""
+
+_SCHEDULE_PROBE = (
+    _HOLDING_PROBE
+    + """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+
+from airflow.executors.workloads import WorkloadType
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.dagrun import DagRun
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+notifications = []
+scheduled_preparations = []
+run_claims = []
+
+def observe_notification(run, msg):
+    notifications.append((run.run_id, run.state, run.start_date, run.end_date, msg))
+    original_notify(run, msg)
+
+original_notify = DagRun.notify_dagrun_state_changed
+DagRun.notify_dagrun_state_changed = observe_notification
+
+job = Job()
+runner = SchedulerJobRunner(job) if mode == "baseline" else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+if mode == "native":
+    hold_tasks(runner)
+    phases = runner.native_driver.phases
+    prepare_scheduled = phases.prepare_scheduled_runs
+    claim_run = phases.dag_run_claimed
+
+    def observe_scheduled(dtos):
+        scheduled_preparations.append(len(dtos))
+        return prepare_scheduled(dtos)
+
+    def observe_claim(dto):
+        run_claims.append((dto["run_id"], dto["state"]))
+        return claim_run(dto)
+
+    phases.prepare_scheduled_runs = observe_scheduled
+    phases.dag_run_claimed = observe_claim
+
+queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+with closing(sqlite3.connect("airflow.db")) as database:
+    def runs():
+        return database.execute(
+            "SELECT run_id, logical_date, data_interval_start, data_interval_end, "
+            "run_after, state, run_type, triggered_by FROM dag_run ORDER BY run_id"
+        ).fetchall()
+
+    expected_run = (
+        "scheduled__2026-01-01T00:00:00+00:00",
+        "2026-01-01 00:00:00.000000",
+        "2026-01-01 00:00:00.000000",
+        "2026-01-01 00:00:00.000000",
+        "2026-01-01 00:00:00.000000",
+        "running",
+        "scheduled",
+        "TIMETABLE",
+    )
+    assert runs() == []
+    assert iteration() == 1
+    assert runs() == [expected_run]
+    assert database.execute(
+        "SELECT next_dagrun, next_dagrun_create_after, exceeds_max_non_backfill FROM dag"
+    ).fetchone() == ("2026-01-02 00:00:00.000000", "2026-01-02 00:00:00.000000", 1)
+    assert database.execute(
+        "SELECT run_id, task_id, state, try_number FROM task_instance"
+    ).fetchall() == [(expected_run[0], "work", "queued", 1)]
+    assert [(run_id, state, end, msg) for run_id, state, start, end, msg in notifications] == [
+        (expected_run[0], "running", None, "started"),
+    ]
+    assert notifications[0][2] is not None
+    if mode == "native":
+        assert scheduled_preparations == [1]
+        assert run_claims == [(expected_run[0], "running")]
+        assert not queue
+        assert database.execute(
+            "SELECT t.run_id FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id "
+            "WHERE a.active = 1"
+        ).fetchone() == (expected_run[0],)
+    else:
+        assert [workload.ti.run_id for workload in queue.values()] == [expected_run[0]]
+
+    for _ in range(2):
+        with create_session() as session:
+            assert runner._do_scheduling(session) == 0
+    assert runs() == [expected_run]
+    assert len(notifications) == 1
+
+    if mode == "native":
+        release_task(database, runner)
+"""
+)
+
+
+@pytest.mark.parametrize("mode", ["baseline", "native"])
+def test_sqlite_scheduler_creates_and_starts_scheduled_run(tmp_path: Path, mode: str):
+    _run_probe(tmp_path, mode, _SCHEDULE_DAG, _SCHEDULE_PROBE)
+
+
+_UNSUPPORTED_SCHEDULE_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+
+from airflow.executors.workloads import WorkloadType
+from airflow.jobs.job import Job
+from airflow.models.dag import DagModel
+from airflow.utils.session import create_session
+from sqlalchemy import update
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+job = Job()
+runner = NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+    session.execute(
+        update(DagModel).where(DagModel.dag_id == "schedule_probe")
+        .values(timetable_type="CustomTimetable")
+    )
+
+phases = runner.native_driver.phases
+prepare_scheduled = phases.prepare_scheduled_runs
+claim_run = phases.dag_run_claimed
+prepared = []
+claims = []
+
+def observe_scheduled(dtos):
+    prepared.append(len(dtos))
+    return prepare_scheduled(dtos)
+
+def observe_claim(dto):
+    claims.append(dto["run_id"])
+    return claim_run(dto)
+
+phases.prepare_scheduled_runs = observe_scheduled
+phases.dag_run_claimed = observe_claim
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
+with closing(sqlite3.connect("airflow.db")) as database:
+    assert iteration() == 1
+    assert prepared == [1]
+    assert claims == []
+    assert database.execute(
+        "SELECT run_id, state FROM dag_run WHERE dag_id = 'schedule_probe'"
+    ).fetchall() == [("scheduled__2026-01-01T00:00:00+00:00", "running")]
+    assert database.execute(
+        "SELECT next_dagrun, next_dagrun_create_after FROM dag "
+        "WHERE dag_id = 'schedule_probe'"
+    ).fetchone() == ("2026-01-02 00:00:00.000000", "2026-01-02 00:00:00.000000")
+    assert [workload.ti.run_id for workload in queue.values()] == [
+        "scheduled__2026-01-01T00:00:00+00:00"
+    ]
+"""
+
+
+def test_native_scheduler_delegates_unsupported_scheduled_creation(tmp_path: Path):
+    _run_probe(tmp_path, "native", _SCHEDULE_DAG, _UNSUPPORTED_SCHEDULE_PROBE)
+
+
 _TaskDAG = """\
 from airflow.sdk import DAG, task
 

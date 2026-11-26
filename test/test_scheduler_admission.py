@@ -42,19 +42,30 @@ from sqlalchemy import update
 from riir_airflow import _lowlevel
 
 mode = sys.argv[1]
-native_decisions = []
-native_admission = _lowlevel.DagRunAdmission
+selections = []
+claims = []
+notifications = []
+select_candidates = _lowlevel.manual_dag_run_candidates
+claim_run = _lowlevel.start_manual_dag_run
+notify = DagRun.notify_dagrun_state_changed
 
-class ObservedAdmission:
-    def __init__(self, running):
-        self.budget = native_admission(running)
+def observe_candidates(connection, limit):
+    candidates = select_candidates(connection, limit)
+    selections.append(candidates)
+    return candidates
 
-    def admit(self, dag_id, limit):
-        admitted = self.budget.admit(dag_id, limit)
-        native_decisions.append((dag_id, limit, admitted))
-        return admitted
+def observe_claim(connection, run_id, now):
+    claimed = claim_run(connection, run_id, now)
+    claims.append((run_id, claimed))
+    return claimed
 
-_lowlevel.DagRunAdmission = ObservedAdmission
+def observe_notification(run, msg):
+    notifications.append((run.run_id, run.state, run.start_date, run.end_date, msg))
+    notify(run, msg)
+
+_lowlevel.manual_dag_run_candidates = observe_candidates
+_lowlevel.start_manual_dag_run = observe_claim
+DagRun.notify_dagrun_state_changed = observe_notification
 
 # SQLite compares run_after against a clock with whole-second precision.
 now = timezone.utcnow() - timedelta(minutes=1)
@@ -67,7 +78,7 @@ for run_id, run_after in [("newer", now), ("older", now - timedelta(minutes=1))]
         triggered_by=DagRunTriggeredByType.CLI,
     )
 
-if mode == "fallback":
+if "mixed" in mode:
     with create_session() as session:
         session.execute(update(DagRun).where(DagRun.run_id == "older").values(run_type=DagRunType.SCHEDULED))
 
@@ -85,10 +96,27 @@ with create_session() as session:
 
 queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
 with closing(sqlite3.connect("airflow.db")) as database:
-    assert runs(database) == [
-        ("older", "queued", None, None),
-        ("newer", "queued", None, None),
-    ]
+    queued = runs(database)
+    assert queued == [("older", "queued", None, None), ("newer", "queued", None, None)]
+    older_id, newer_id = (
+        row[0] for row in database.execute("SELECT id FROM dag_run ORDER BY run_after")
+    )
+
+    if mode == "native":
+        # The Rust update is visible to the Airflow session and listener,
+        # but a rollback keeps it out of committed metadata.
+        with create_session() as session:
+            runner._start_queued_dagruns(session)
+            run = session.get(DagRun, older_id)
+            assert run.state == "running"
+            assert run.start_date is not None
+            assert run.start_date == run.updated_at
+            assert runs(database) == queued
+            session.rollback()
+        assert runs(database) == queued
+        selections.clear()
+        claims.clear()
+        notifications.clear()
 
     with create_session() as session:
         assert runner._do_scheduling(session) == 1
@@ -105,15 +133,22 @@ with closing(sqlite3.connect("airflow.db")) as database:
         assert runner._do_scheduling(session) == 0
 
     assert runs(database) == admitted
-    assert native_decisions == (
-        [("admission_probe", 1, True), ("admission_probe", 1, False)]
-        if mode == "native" else []
-    ), native_decisions
+    assert [(run_id, state, end, msg) for run_id, state, start, end, msg in notifications] == [
+        ("older", "running", None, "started"),
+    ]
+    assert notifications[0][2] is not None
+    assert selections == {
+        "native": [[older_id, newer_id], []],
+        "mixed-native": [None, []],
+    }.get(mode, [])
+    assert claims == ([(older_id, True), (newer_id, False)] if mode == "native" else [])
     assert [workload.ti.run_id for workload in queue.values()] == ["older"]
 """
 
 
-@pytest.mark.parametrize("mode", ["baseline", "native", "fallback"])
+@pytest.mark.parametrize(
+    "mode", ["baseline", "native", "mixed-baseline", "mixed-native"]
+)
 def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path, mode: str):
     assert airflow.__version__ == BASELINE_AIRFLOW_VERSION
     dags = tmp_path / "dags"
@@ -131,7 +166,7 @@ def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path, mode: str):
         AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION="False",
         AIRFLOW__CORE__EXECUTOR=(
             "LocalExecutor"
-            if mode == "baseline"
+            if mode.endswith("baseline")
             else "riir_airflow.executors.asgi_executor.AsgiExecutor"
         ),
         AIRFLOW__API_AUTH__JWT_SECRET="admission-probe-test-secret-" * 3,

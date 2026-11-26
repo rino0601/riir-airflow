@@ -342,6 +342,7 @@ from unittest.mock import patch
 from airflow.api.common.trigger_dag import trigger_dag
 from airflow.executors.workloads import WorkloadType
 from airflow.jobs.job import Job
+from airflow.models.dag import DagModel
 from airflow.models.dagrun import DagRun
 from airflow.models.taskinstance import TaskInstance
 from airflow.sdk import timezone
@@ -385,7 +386,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     def state(run, task):
         return observer.execute(
             "SELECT state, queued_dttm, queued_by_job_id FROM task_instance "
-            "WHERE run_id = ? AND task_id = ?", (run, task)
+            "WHERE run_id = ? AND task_id = ? AND working_set IS TRUE", (run, task)
         ).fetchone()
 
     prepare_run = phases.prepare_dag_runs
@@ -508,12 +509,32 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     assert final.adopt_or_reset_orphaned_tasks() == 1
     assert len(final_queue) == 1
     assert state("probe", "work")[2] == final_job.id
-    with closing(sqlite3.connect("airflow.db")) as observer:
-        assert observer.execute(
-            "SELECT state FROM job WHERE id = ?", (new_job.id,)
-        ).fetchone() == ("failed",)
+    assert observer.execute(
+        "SELECT state FROM job WHERE id = ?", (new_job.id,)
+    ).fetchone() == ("failed",)
     assert final.adopt_or_reset_orphaned_tasks() == 0
     assert len(final_queue) == 1
+
+    # An orphan outside the native subset is reset by Airflow and can be queued again.
+    fallback_job = Job(state="running")
+    fallback = NativeSchedulerJobRunner(fallback_job)
+    fallback_queue = fallback.executor.executor_queues[WorkloadType.EXECUTE_TASK]
+    with create_session() as session:
+        session.execute(update(DagModel).where(DagModel.dag_id == "admission_probe")
+                        .values(fail_fast=True))
+        session.execute(
+            update(Job).where(Job.id == final_job.id)
+            .values(latest_heartbeat=timezone.utcnow() - timedelta(hours=1))
+        )
+        session.add(fallback_job)
+    assert fallback.adopt_or_reset_orphaned_tasks() == 1
+    assert state("probe", "work")[0] is None
+    assert not fallback_queue
+    assert fallback.adopt_or_reset_orphaned_tasks() == 0
+    with create_session() as session:
+        assert fallback._do_scheduling(session) == 1
+    assert state("probe", "work")[2] == fallback_job.id
+    assert len(fallback_queue) == 1
 """
 
 

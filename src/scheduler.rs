@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use rusqlite::types::ValueRef;
-use rusqlite::{Connection, ErrorCode, OpenFlags, TransactionBehavior, params};
+use rusqlite::{Connection, ErrorCode, OpenFlags, TransactionBehavior, named_params, params};
 use serde_json::{Value, json};
 
 const RUN_COLUMNS: &str = "r.id AS id, r.dag_id AS dag_id, r.run_id AS run_id,
@@ -39,6 +39,15 @@ const TASK_COLUMNS: &str = "t.id AS id, t.task_id AS task_id, t.dag_id AS dag_id
     r.data_interval_end AS data_interval_end, r.bundle_version AS bundle_version,
     r.created_dag_version_id AS created_dag_version_id, r.state AS run_state,
     dv.bundle_version AS version_bundle_version, dv.version_data AS version_data";
+
+const NATIVE_TASK_REQUIREMENTS: &str = "NOT coalesce(d.has_task_concurrency_limits, 0)
+    AND t.executor IS NULL AND t.dag_version_id IS NOT NULL
+    AND dv.id IS NOT NULL
+    AND (t.region_id = :sentinel_region OR t.region_id IS NULL)
+    AND t.pool_slots > 0
+    AND t.next_method IS NULL AND t.next_kwargs IS NULL
+    AND t.trigger_id IS NULL
+    AND NOT coalesce(d.fail_fast, 0)";
 
 const SENTINEL_REGION: &str = "00000000000000000000000000000000";
 
@@ -298,14 +307,14 @@ impl NativeScheduler {
         job_id: i64,
         limit: i64,
         stale_before: &str,
-    ) -> PyResult<usize> {
+    ) -> PyResult<Option<usize>> {
         let py = phases.py();
         let transaction = match self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
         {
             Ok(transaction) => transaction,
-            Err(error) if is_busy(&error) => return Ok(0),
+            Err(error) if is_busy(&error) => return Ok(Some(0)),
             Err(error) => return Err(sql_error(error)),
         };
         transaction
@@ -317,36 +326,52 @@ impl NativeScheduler {
             )
             .map_err(sql_error)?;
         let sql = format!(
-            "SELECT {TASK_COLUMNS}
+            "SELECT {TASK_COLUMNS},
+                coalesce(t.state = 'queued' AND {NATIVE_TASK_REQUIREMENTS}, 0) AS supported
             FROM task_instance AS t
             JOIN dag_run AS r ON r.dag_id = t.dag_id AND r.run_id = t.run_id
             JOIN dag AS d ON d.dag_id = t.dag_id
             JOIN job AS j ON j.id = t.queued_by_job_id
             LEFT JOIN dag_version AS dv ON dv.id = r.created_dag_version_id
-            WHERE t.working_set IS TRUE AND t.state = 'queued' AND r.state = 'running'
-                AND coalesce(j.state, '') != 'running' AND j.id != ?1
-            ORDER BY t.queued_dttm, t.id
-            LIMIT ?2"
+            WHERE t.working_set IS TRUE AND t.state IN ('queued', 'running', 'restarting')
+                AND r.state = 'running'
+                AND coalesce(j.state, '') != 'running' AND j.id != :job_id
+            ORDER BY supported, t.queued_dttm, t.id
+            LIMIT 1"
         );
-        let dto = {
+        let candidate = {
             let mut statement = transaction.prepare(&sql).map_err(sql_error)?;
             let rows = statement
-                .query_map(params![job_id, limit], |row| {
-                    task_dto(py, row, "queued").map_err(py_to_sql)
-                })
+                .query_map(
+                    named_params! {":job_id": job_id, ":sentinel_region": SENTINEL_REGION},
+                    |row| {
+                        if row.get::<_, bool>("supported")? {
+                            task_dto(py, row, "queued").map(Some).map_err(py_to_sql)
+                        } else {
+                            Ok(None)
+                        }
+                    },
+                )
                 .map_err(sql_error)?;
             rows.into_iter().next().transpose().map_err(sql_error)?
         };
-        let Some(dto) = dto else {
+        let Some(candidate) = candidate else {
             transaction.commit().map_err(sql_error)?;
-            return Ok(0);
+            return Ok(Some(0));
         };
+        // Let Airflow handle all orphans if any attempt falls outside native recovery.
+        let Some(dto) = candidate else {
+            return Ok(None);
+        };
+        if limit <= 0 {
+            transaction.commit().map_err(sql_error)?;
+            return Ok(Some(0));
+        }
         if !phases
             .call_method1("prepare_task", (dto.clone(),))?
             .is_truthy()?
         {
-            transaction.commit().map_err(sql_error)?;
-            return Ok(0);
+            return Ok(None);
         }
         let id: String = item(&dto, "id")?.extract()?;
         let updated = transaction
@@ -357,11 +382,11 @@ impl NativeScheduler {
             .map_err(sql_error)?;
         if updated != 1 {
             transaction.commit().map_err(sql_error)?;
-            return Ok(0);
+            return Ok(Some(0));
         }
         dto.set_item("queued_by_job_id", job_id)?;
         commit_workload(transaction, phases, dto)?;
-        Ok(1)
+        Ok(Some(1))
     }
 
     fn claim_dag_runs(
@@ -498,14 +523,7 @@ impl NativeScheduler {
                 ), ranked AS (
                     SELECT {TASK_COLUMNS}, t.pool AS selected_pool,
                         d.max_active_tasks AS max_active_tasks,
-                        (NOT coalesce(d.has_task_concurrency_limits, 0)
-                            AND t.executor IS NULL AND t.dag_version_id IS NOT NULL
-                            AND dv.id IS NOT NULL
-                            AND (t.region_id = ?4 OR t.region_id IS NULL)
-                            AND t.pool_slots > 0
-                            AND t.next_method IS NULL AND t.next_kwargs IS NULL
-                            AND t.trigger_id IS NULL
-                            AND NOT coalesce(d.fail_fast, 0)) AS supported,
+                        coalesce({NATIVE_TASK_REQUIREMENTS}, 0) AS supported,
                         row_number() OVER (
                             PARTITION BY t.dag_id, t.run_id
                             ORDER BY -t.priority_weight, r.logical_date, t.region_index
@@ -518,23 +536,23 @@ impl NativeScheduler {
                     WHERE t.working_set IS TRUE AND t.state = 'scheduled'
                         AND r.state = 'running' AND NOT d.is_paused AND d.bundle_name IS NOT NULL
                         AND coalesce(a.occupied, 0) < d.max_active_tasks
-                        AND t.pool NOT IN (SELECT value FROM json_each(?1))
+                        AND t.pool NOT IN (SELECT value FROM json_each(:starved_pools))
                         AND (t.dag_id, t.task_id) NOT IN (
-                            SELECT value ->> 0, value ->> 1 FROM json_each(?2)
+                            SELECT value ->> 0, value ->> 1 FROM json_each(:starved_tasks)
                         )
                 )
                 SELECT * FROM ranked WHERE rank <= max_active_tasks
-                ORDER BY -priority_weight, logical_date, region_index LIMIT ?3"
+                ORDER BY -priority_weight, logical_date, region_index LIMIT :limit"
             );
             let mut statement = transaction.prepare(&sql).map_err(sql_error)?;
             let rows = statement
                 .query_map(
-                    params![
-                        json!(starved_pools).to_string(),
-                        json!(starved_tasks).to_string(),
-                        limit,
-                        SENTINEL_REGION,
-                    ],
+                    named_params! {
+                        ":starved_pools": json!(starved_pools).to_string(),
+                        ":starved_tasks": json!(starved_tasks).to_string(),
+                        ":limit": limit,
+                        ":sentinel_region": SENTINEL_REGION,
+                    },
                     |row| {
                         let supported = row.get::<_, i64>("supported")? != 0;
                         let pool: String = row.get::<_, String>("selected_pool")?;

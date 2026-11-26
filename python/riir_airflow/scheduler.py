@@ -112,9 +112,9 @@ class NativeSchedulerDriver:
             now,
         )
 
-    def recover_queued_workloads(self) -> int:
+    def recover_queued_workloads(self) -> int | None:
         if not self.supported():
-            return 0
+            return None
         threshold = conf.getint("scheduler", "scheduler_health_check_threshold")
         stale_before = (timezone.utcnow() - timedelta(seconds=threshold)).strftime(
             "%Y-%m-%d %H:%M:%S.%f"
@@ -411,8 +411,11 @@ class NativeSchedulerJobRunner(SchedulerJobRunner):
             session.expunge_all()
 
     def adopt_or_reset_orphaned_tasks(self, *, session=NEW_SESSION) -> int:
-        if self.native_driver.supported():
-            return self.native_driver.recover_queued_workloads()
+        recovered = self.native_driver.recover_queued_workloads()
+        if recovered is not None:
+            return recovered
+        if session is NEW_SESSION:
+            return super().adopt_or_reset_orphaned_tasks()
         return super().adopt_or_reset_orphaned_tasks(session=session)
 
 

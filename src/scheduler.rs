@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -116,6 +116,10 @@ fn optional_i64(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<i64>> {
     } else {
         value.extract()
     }
+}
+
+fn bool_field(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<bool> {
+    item(dict, key)?.is_truthy()
 }
 
 fn optional_bytes(dict: &Bound<'_, PyDict>, key: &str) -> PyResult<Option<Vec<u8>>> {
@@ -374,7 +378,11 @@ impl NativeScheduler {
             _ => {}
         }
 
-        phases.call_method0("between_phases")?;
+        let delegate = match self.schedule_dependencies(phases, dag_run_limit, job_id, now)? {
+            Some(delegate) => delegate,
+            None => return Ok(0),
+        };
+        phases.call_method1("between_phases", (PyList::new(phases.py(), &delegate)?,))?;
         let Some(lease) = lease else {
             return Ok(0);
         };
@@ -809,6 +817,170 @@ impl NativeScheduler {
         Ok(("committed".into(), claimed))
     }
 
+    fn schedule_dependencies(
+        &mut self,
+        phases: &Bound<'_, PyAny>,
+        limit: i64,
+        job_id: i64,
+        now: &str,
+    ) -> PyResult<Option<Vec<i64>>> {
+        let py = phases.py();
+        let transaction = match self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+        {
+            Ok(transaction) => transaction,
+            Err(error) if is_busy(&error) => return Ok(None),
+            Err(error) => return Err(sql_error(error)),
+        };
+        let sql = format!(
+            "SELECT {RUN_COLUMNS} FROM dag_run AS r
+             JOIN dag AS d ON d.dag_id = r.dag_id
+             WHERE r.state = 'running' AND d.is_paused = 0 AND d.is_stale = 0
+                 AND r.run_after <= CURRENT_TIMESTAMP
+             ORDER BY r.last_scheduling_decision IS NOT NULL,
+                 r.last_scheduling_decision, r.run_after
+             LIMIT ?1"
+        );
+        let candidates = {
+            let mut statement = transaction.prepare(&sql).map_err(sql_error)?;
+            let rows = statement
+                .query_map([limit], |row| run_dto(py, row).map_err(py_to_sql))
+                .map_err(sql_error)?;
+            rows.collect::<Result<Vec<_>, _>>().map_err(sql_error)?
+        };
+        if candidates.is_empty() {
+            transaction.commit().map_err(sql_error)?;
+            return Ok(Some(Vec::new()));
+        }
+        let graphs = phases.call_method1(
+            "prepare_dependency_graphs",
+            (PyList::new(py, &candidates)?,),
+        )?;
+        let graphs = graphs.cast::<PyList>()?;
+        if graphs.len() != candidates.len() {
+            return Err(PyValueError::new_err(
+                "dependency graph callback returned the wrong number of entries",
+            ));
+        }
+
+        let mut delegate = Vec::new();
+        for (dto, graph) in candidates.iter().zip(graphs.iter()) {
+            let run_id: i64 = item(dto, "id")?.extract()?;
+            if !supported_dependency_run(dto)? || graph.is_none() {
+                delegate.push(run_id);
+                continue;
+            }
+            let graph = graph.cast::<PyDict>()?;
+            let graph = dependency_graph(&graph)?;
+            let dag_id = optional_string(dto, "dag_id")?
+                .ok_or_else(|| PyValueError::new_err("missing dag id in dependency candidate"))?;
+            let run_name = optional_string(dto, "run_id")?
+                .ok_or_else(|| PyValueError::new_err("missing run id in dependency candidate"))?;
+            let version = optional_string(dto, "created_dag_version_id")?;
+            let tis = dependency_tis(&transaction, &dag_id, &run_name)?;
+            let mut success = HashSet::new();
+            let mut ready = Vec::new();
+            let mut unsupported = tis.is_empty();
+            let mut unfinished = false;
+            let mut seen = HashSet::new();
+            for ti in tis {
+                if !seen.insert(ti.task_id.clone()) || !graph.contains_key(&ti.task_id) {
+                    unsupported = true;
+                    break;
+                }
+                if ti.region_index != -1
+                    || ti
+                        .region_id
+                        .as_deref()
+                        .is_some_and(|id| id != SENTINEL_REGION)
+                    || ti.dag_version_id != version
+                {
+                    unsupported = true;
+                    break;
+                }
+                match ti.state.as_deref() {
+                    Some("success") => {
+                        success.insert(ti.task_id);
+                    }
+                    Some("scheduled") | Some("queued") | Some("running") => unfinished = true,
+                    None => {
+                        unfinished = true;
+                        ready.push((ti.id, ti.task_id));
+                    }
+                    Some("up_for_retry") => match ti.retry_at.as_deref() {
+                        None => {
+                            unsupported = true;
+                            break;
+                        }
+                        Some(retry_at) if retry_at <= now => {
+                            unfinished = true;
+                            ready.push((ti.id, ti.task_id));
+                        }
+                        Some(_) => unfinished = true,
+                    },
+                    _ => {
+                        unsupported = true;
+                        break;
+                    }
+                }
+            }
+            if unsupported || !unfinished || graph.keys().any(|task_id| !seen.contains(task_id)) {
+                delegate.push(run_id);
+                continue;
+            }
+            let ready: Vec<String> = ready
+                .into_iter()
+                .filter(|(_, task_id)| {
+                    graph.get(task_id).is_some_and(|parents| {
+                        parents.iter().all(|parent| success.contains(parent))
+                    })
+                })
+                .map(|(id, _)| id)
+                .collect();
+
+            let updated = match transaction.execute(
+                "UPDATE dag_run SET last_scheduling_decision = ?1, scheduled_by_job_id = ?2
+                 WHERE id = ?3 AND state = 'running'",
+                params![now, job_id, run_id],
+            ) {
+                Ok(updated) => updated,
+                Err(error) if is_busy(&error) => return Ok(None),
+                Err(error) => return Err(sql_error(error)),
+            };
+            if updated != 1 {
+                delegate.push(run_id);
+                continue;
+            }
+            for id in ready {
+                let updated = match transaction.execute(
+                    "UPDATE task_instance AS t
+                     SET state = 'scheduled', scheduled_dttm = ?1,
+                         try_number = CASE WHEN t.try_number = 0 THEN 1 ELSE t.try_number END,
+                         retry_reason = NULL, retry_delay_override = NULL, retry_at = NULL
+                     WHERE t.id = ?2 AND t.working_set IS TRUE
+                         AND (t.state IS NULL OR (t.state = 'up_for_retry'
+                             AND t.retry_at IS NOT NULL AND t.retry_at <= ?1))
+                         AND EXISTS (
+                             SELECT 1 FROM dag_run AS r
+                             WHERE r.id = ?3 AND r.state = 'running'
+                                 AND r.dag_id = t.dag_id AND r.run_id = t.run_id
+                         )",
+                    params![now, id, run_id],
+                ) {
+                    Ok(updated) => updated,
+                    Err(error) if is_busy(&error) => return Ok(None),
+                    Err(error) => return Err(sql_error(error)),
+                };
+                if updated != 1 {
+                    return Ok(None);
+                }
+            }
+        }
+        transaction.commit().map_err(sql_error)?;
+        Ok(Some(delegate))
+    }
+
     fn claim_task(
         &mut self,
         phases: &Bound<'_, PyAny>,
@@ -944,6 +1116,87 @@ impl NativeScheduler {
             usize::from(self.launch(workload, lease)?),
         ))
     }
+}
+
+struct DependencyTi {
+    id: String,
+    task_id: String,
+    state: Option<String>,
+    retry_at: Option<String>,
+    dag_version_id: Option<String>,
+    region_index: i64,
+    region_id: Option<String>,
+}
+
+fn supported_dependency_run(dto: &Bound<'_, PyDict>) -> PyResult<bool> {
+    if optional_i64(dto, "backfill_id")?.is_some()
+        || optional_string(dto, "created_dag_version_id")?.is_none()
+    {
+        return Ok(false);
+    }
+    let timetable = optional_string(dto, "timetable_type")?;
+    if !matches!(
+        timetable.as_deref(),
+        Some(
+            "NullTimetable"
+                | "CronDataIntervalTimetable"
+                | "CronTriggerTimetable"
+                | "DeltaDataIntervalTimetable"
+                | "DeltaTriggerTimetable"
+        )
+    ) || bool_field(dto, "timetable_partitioned")?
+        || bool_field(dto, "timetable_asset_gated")?
+        || optional_string(dto, "asset_expression")?.is_some()
+        || optional_string(dto, "deadline")?.is_some()
+    {
+        return Ok(false);
+    }
+    match optional_string(dto, "run_type")?.as_deref() {
+        Some("manual") => Ok(true),
+        Some("scheduled") => Ok(optional_string(dto, "triggered_by")?.as_deref()
+            == Some("TIMETABLE")
+            && timetable.as_deref() != Some("NullTimetable")),
+        _ => Ok(false),
+    }
+}
+
+fn dependency_graph(entry: &Bound<'_, PyDict>) -> PyResult<HashMap<String, Vec<String>>> {
+    let binding = item(entry, "upstreams")?;
+    let upstreams = binding.cast::<PyDict>()?;
+    let mut graph = HashMap::new();
+    for (task_id, parents) in upstreams.iter() {
+        graph.insert(task_id.extract()?, parents.extract()?);
+    }
+    Ok(graph)
+}
+
+fn dependency_tis(
+    transaction: &rusqlite::Transaction<'_>,
+    dag_id: &str,
+    run_id: &str,
+) -> PyResult<Vec<DependencyTi>> {
+    let sql = "SELECT t.id AS id, t.task_id AS task_id, t.state AS state,
+            t.retry_at AS retry_at,
+            t.dag_version_id AS dag_version_id, t.region_index AS region_index,
+            t.region_id AS region_id
+        FROM task_instance AS t
+        WHERE t.dag_id = ?1 AND t.run_id = ?2 AND t.working_set IS TRUE
+        ORDER BY t.task_id";
+    let mut statement = transaction.prepare(sql).map_err(sql_error)?;
+    let rows = statement
+        .query_map(params![dag_id, run_id], |row| {
+            Ok(DependencyTi {
+                id: row.get("id")?,
+                task_id: row.get("task_id")?,
+                state: row.get("state")?,
+                retry_at: row.get("retry_at")?,
+                dag_version_id: row.get("dag_version_id")?,
+                region_index: row.get("region_index")?,
+                region_id: row.get("region_id")?,
+            })
+        })
+        .map_err(sql_error)?;
+    rows.collect::<Result<Vec<_>, _>>().map_err(sql_error)
 }
 
 fn prepare_workload(

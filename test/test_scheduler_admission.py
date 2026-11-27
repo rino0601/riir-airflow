@@ -958,7 +958,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     try:
         assert locker.stdout.readline().strip() == "locked"
         with patch.object(phases, "before_runs", lambda: None), patch.object(
-            phases, "between_phases", lambda: None
+            phases, "between_phases", lambda *_: None
         ):
             assert iteration() == 0
         assert prepare_calls == [], prepare_calls
@@ -1359,6 +1359,542 @@ def test_python_module_scheduler_entry_point(tmp_path: Path):
         AIRFLOW__SCHEDULER__NUM_RUNS="1",
         AIRFLOW__CORE__UNIT_TEST_MODE="True",
     )
+
+
+_DEPENDENCY_DAG = """\
+from airflow.sdk import DAG, task
+
+with DAG("admission_probe", schedule=None, max_active_runs=1) as dag:
+    @task
+    def upstream():
+        pass
+
+    @task
+    def downstream():
+        pass
+
+    upstream() >> downstream()
+"""
+
+_DEPENDENCY_FALLBACK_DAG = """\
+from airflow.sdk import DAG, task
+
+with DAG("admission_probe", schedule=None, max_active_runs=1) as dag:
+    @task
+    def upstream():
+        pass
+
+    @task(trigger_rule="all_done")
+    def downstream():
+        pass
+
+    upstream() >> downstream()
+"""
+
+_DEPENDENCY_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+from unittest.mock import patch
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+job = Job()
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+trigger_dag(
+    "admission_probe", run_id="probe",
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+delegate_calls = []
+graph_calls = []
+if mode.endswith("native"):
+    phases = runner.native_driver.phases
+    between = phases.between_phases
+    graphs = phases.prepare_dependency_graphs
+
+    def observe_between(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return between(delegate_ids)
+
+    def observe_graphs(dtos):
+        result = graphs(dtos)
+        graph_calls.append(result)
+        return result
+
+    phases.between_phases = observe_between
+    phases.prepare_dependency_graphs = observe_graphs
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    def states():
+        return dict(observer.execute(
+            "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+        ))
+
+    def mark_upstream_success():
+        with sqlite3.connect("airflow.db") as writable:
+            writable.execute(
+                "UPDATE task_instance SET state = 'success' "
+                "WHERE run_id = 'probe' AND task_id = 'upstream'"
+            )
+
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+        assert states() == {"upstream": "scheduled", "downstream": None}, states()
+        mark_upstream_success()
+        iteration()
+        assert states() == {"upstream": "success", "downstream": "scheduled"}, states()
+        iteration()
+        assert states() == {"upstream": "success", "downstream": "scheduled"}, states()
+
+    if mode.endswith("native"):
+        run_pk = observer.execute(
+            "SELECT id FROM dag_run WHERE run_id = 'probe'"
+        ).fetchone()[0]
+        assert len(graph_calls) == 3
+        assert len(delegate_calls) == 3
+        if mode.startswith("fallback"):
+            assert graph_calls == [[None], [None], [None]]
+            assert delegate_calls == [[run_pk], [run_pk], [run_pk]]
+        else:
+            assert [call[0]["id"] for call in graph_calls] == [run_pk] * 3
+            assert delegate_calls == [[], [], []]
+"""
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "supported-baseline",
+        "supported-native",
+        "fallback-baseline",
+        "fallback-native",
+    ],
+)
+def test_native_scheduler_evaluates_task_dependencies(tmp_path: Path, mode: str):
+    dag_source = (
+        _DEPENDENCY_FALLBACK_DAG if mode.startswith("fallback") else _DEPENDENCY_DAG
+    )
+    _run_probe(tmp_path, mode, dag_source, _DEPENDENCY_PROBE)
+
+
+_FUTURE_LOGICAL_DATE_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+from unittest.mock import patch
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+job = Job()
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+delegate_calls = []
+graph_calls = []
+if mode.endswith("native"):
+    phases = runner.native_driver.phases
+    between = phases.between_phases
+    graphs = phases.prepare_dependency_graphs
+
+    def observe_between(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return between(delegate_ids)
+
+    def observe_graphs(dtos):
+        result = graphs(dtos)
+        graph_calls.append(result)
+        return result
+
+    phases.between_phases = observe_between
+    phases.prepare_dependency_graphs = observe_graphs
+
+trigger_dag(
+    "admission_probe", run_id="probe", logical_date=timezone.utcnow() + timedelta(hours=1),
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+        assert dict(observer.execute(
+            "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+        )) == {"upstream": None, "downstream": None}
+
+    if mode.endswith("native"):
+        run_pk = observer.execute(
+            "SELECT id FROM dag_run WHERE run_id = 'probe'"
+        ).fetchone()[0]
+        assert graph_calls == [[None]]
+        assert delegate_calls == [[run_pk]]
+"""
+
+
+@pytest.mark.parametrize("mode", ["future-baseline", "future-native"])
+def test_native_scheduler_defers_future_logical_dates(tmp_path: Path, mode: str):
+    _run_probe(tmp_path, mode, _DEPENDENCY_DAG, _FUTURE_LOGICAL_DATE_PROBE)
+
+
+_VERSION_CHANGE_PROBE = """\
+import os
+import sqlite3
+import subprocess
+import sys
+import time
+from contextlib import closing
+from datetime import timedelta
+from pathlib import Path
+from unittest.mock import patch
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+job = Job()
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+delegate_calls = []
+graph_calls = []
+if mode.endswith("native"):
+    phases = runner.native_driver.phases
+    between = phases.between_phases
+    graphs = phases.prepare_dependency_graphs
+
+    def observe_between(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return between(delegate_ids)
+
+    def observe_graphs(dtos):
+        result = graphs(dtos)
+        graph_calls.append(result)
+        return result
+
+    phases.between_phases = observe_between
+    phases.prepare_dependency_graphs = observe_graphs
+
+trigger_dag(
+    "admission_probe", run_id="probe",
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    original_version = observer.execute(
+        "SELECT created_dag_version_id FROM dag_run WHERE run_id = 'probe'"
+    ).fetchone()[0]
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+        assert dict(observer.execute(
+            "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+        )) == {"upstream": "scheduled", "downstream": None}
+
+time.sleep(1)
+(Path(os.environ["AIRFLOW_HOME"]) / "dags" / "admission_probe.py").write_text('''
+from airflow.sdk import DAG, task
+
+with DAG("admission_probe", schedule=None, max_active_runs=1) as dag:
+    @task
+    def upstream():
+        pass
+
+    @task
+    def downstream():
+        pass
+
+    @task
+    def extra():
+        pass
+
+    upstream() >> downstream() >> extra()
+''')
+processed = subprocess.run(
+    [sys.executable, "-m", "airflow", "dag-processor", "--num-runs", "2"],
+    env=os.environ.copy(), cwd=os.getcwd(), capture_output=True, text=True,
+    timeout=90,
+)
+assert processed.returncode == 0, processed.stdout + processed.stderr
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+
+    latest_version = observer.execute(
+        "SELECT id FROM dag_version ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()[0]
+    assert latest_version != original_version, (latest_version, original_version)
+    assert dict(observer.execute(
+        "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+    )) == {"upstream": "scheduled", "downstream": None, "extra": None}
+    assert set(observer.execute(
+        "SELECT DISTINCT dag_version_id FROM task_instance WHERE run_id = 'probe'"
+    )) == {(latest_version,)}
+
+    if mode.endswith("native"):
+        run_pk = observer.execute(
+            "SELECT id FROM dag_run WHERE run_id = 'probe'"
+        ).fetchone()[0]
+        assert len(graph_calls) == 2
+        assert graph_calls[0][0]["id"] == run_pk
+        assert graph_calls[1] == [None]
+        assert delegate_calls == [[], [run_pk]]
+"""
+
+
+@pytest.mark.parametrize("mode", ["version-baseline", "version-native"])
+def test_native_scheduler_delegates_changed_unpinned_runs(tmp_path: Path, mode: str):
+    _run_probe(tmp_path, mode, _DEPENDENCY_DAG, _VERSION_CHANGE_PROBE)
+
+
+_TIMEOUT_DAG = """\
+from datetime import timedelta
+
+from airflow.sdk import DAG, task
+
+with DAG(
+    "admission_probe", schedule=None, max_active_runs=1, dagrun_timeout=timedelta(seconds=1)
+) as dag:
+    @task
+    def upstream():
+        pass
+
+    @task
+    def downstream():
+        pass
+
+    upstream() >> downstream()
+"""
+
+_TIMEOUT_PROBE = """\
+import sqlite3
+import sys
+import time
+from contextlib import closing
+from datetime import timedelta
+from unittest.mock import patch
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+job = Job()
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+delegate_calls = []
+graph_calls = []
+if mode.endswith("native"):
+    phases = runner.native_driver.phases
+    between = phases.between_phases
+    graphs = phases.prepare_dependency_graphs
+
+    def observe_between(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return between(delegate_ids)
+
+    def observe_graphs(dtos):
+        result = graphs(dtos)
+        graph_calls.append(result)
+        return result
+
+    phases.between_phases = observe_between
+    phases.prepare_dependency_graphs = observe_graphs
+
+trigger_dag(
+    "admission_probe", run_id="probe",
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+        assert dict(observer.execute(
+            "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+        )) == {"upstream": "scheduled", "downstream": None}
+        time.sleep(1.2)
+        iteration()
+        assert observer.execute(
+            "SELECT state FROM dag_run WHERE run_id = 'probe'"
+        ).fetchone() == ("failed",)
+        assert dict(observer.execute(
+            "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+        )) == {"upstream": "skipped", "downstream": "skipped"}
+
+    if mode.endswith("native"):
+        run_pk = observer.execute(
+            "SELECT id FROM dag_run WHERE run_id = 'probe'"
+        ).fetchone()[0]
+        assert graph_calls == [[None], [None]]
+        assert delegate_calls == [[run_pk], [run_pk]]
+"""
+
+
+@pytest.mark.parametrize("mode", ["timeout-baseline", "timeout-native"])
+def test_native_scheduler_delegates_dagrun_timeouts(tmp_path: Path, mode: str):
+    _run_probe(tmp_path, mode, _TIMEOUT_DAG, _TIMEOUT_PROBE)
+
+
+_RETRY_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+from unittest.mock import patch
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+job = Job()
+runner = SchedulerJobRunner(job) if mode.endswith("baseline") else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+trigger_dag(
+    "admission_probe", run_id="probe",
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+delegate_calls = []
+graph_calls = []
+if mode.endswith("native"):
+    phases = runner.native_driver.phases
+    between = phases.between_phases
+    graphs = phases.prepare_dependency_graphs
+
+    def observe_between(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return between(delegate_ids)
+
+    def observe_graphs(dtos):
+        result = graphs(dtos)
+        graph_calls.append(result)
+        return result
+
+    phases.between_phases = observe_between
+    phases.prepare_dependency_graphs = observe_graphs
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    def states():
+        return dict(observer.execute(
+            "SELECT task_id, state FROM task_instance WHERE run_id = 'probe'"
+        ))
+
+    def set_retry(retry_at):
+        with sqlite3.connect("airflow.db") as writable:
+            writable.execute(
+                "UPDATE task_instance SET state = 'up_for_retry', retry_at = ? "
+                "WHERE run_id = 'probe' AND task_id = 'upstream'",
+                (retry_at,),
+            )
+
+    future = (timezone.utcnow() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
+    past = (timezone.utcnow() - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+        assert states() == {"upstream": "scheduled", "downstream": None}, states()
+        set_retry(future)
+        iteration()
+        assert states() == {"upstream": "up_for_retry", "downstream": None}, states()
+        set_retry(past)
+        iteration()
+        assert states() == {"upstream": "scheduled", "downstream": None}, states()
+
+    if mode.endswith("native"):
+        run_pk = observer.execute(
+            "SELECT id FROM dag_run WHERE run_id = 'probe'"
+        ).fetchone()[0]
+        assert len(graph_calls) == 3
+        assert len(delegate_calls) == 3
+        assert [call[0]["id"] if call[0] else None for call in graph_calls] == [
+            run_pk,
+            run_pk,
+            None,
+        ]
+        assert delegate_calls == [[], [], [run_pk]]
+"""
+
+
+@pytest.mark.parametrize("mode", ["retry-baseline", "retry-native"])
+def test_native_scheduler_honors_retry_period(tmp_path: Path, mode: str):
+    _run_probe(tmp_path, mode, _DEPENDENCY_DAG, _RETRY_PROBE)
 
 
 def test_database_path_keeps_relative_sqlite_url(monkeypatch):

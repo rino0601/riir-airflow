@@ -25,11 +25,13 @@ from airflow.models.taskinstance import SENTINEL_REGION_ID
 from airflow.models.taskinstance import TaskInstance as TI
 from airflow.sdk import timezone
 from airflow.sdk.execution_time.coordinator import get_coordinator_manager
+from airflow.serialization.definitions.baseoperator import DEFAULT_OPERATOR_DEPS
 from airflow.settings import task_instance_mutation_hook
 from airflow.utils.log.task_log_address import TaskLogContext, render_task_log_filename
 from airflow.utils.session import NEW_SESSION, create_session
 from airflow.utils.state import DagRunState
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
+from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import dialect
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import make_transient
@@ -445,7 +447,108 @@ class SchedulerPhases:
         run.notify_dagrun_state_changed(msg="started")
         return True
 
-    def between_phases(self) -> None:
+    def prepare_dependency_graphs(self, dtos: list[dict]) -> list[dict | None]:
+        if (
+            get_listener_manager().has_listeners
+            or get_coordinator_manager().has_coordinators()
+            or not getattr(task_instance_mutation_hook, "is_noop", False)
+        ):
+            return [None] * len(dtos)
+        graphs: list[dict | None] = []
+        for dto in dtos:
+            version = _uuid(dto["created_dag_version_id"])
+            if not dto["bundle_version"]:
+                with create_session() as session:
+                    latest = DagVersion.get_latest_version(
+                        dto["dag_id"], session=session
+                    )
+                if latest is None or latest.id != version:
+                    graphs.append(None)
+                    continue
+            with create_session() as session:
+                due_retry = session.execute(
+                    select(TI.id)
+                    .where(
+                        TI.dag_id == dto["dag_id"],
+                        TI.run_id == dto["run_id"],
+                        TI.state == "up_for_retry",
+                        TI.retry_at.is_not(None),
+                        TI.retry_at <= timezone.utcnow(),
+                    )
+                    .limit(1)
+                ).first()
+            if due_retry is not None:
+                graphs.append(None)
+                continue
+            logical_date = (
+                _datetime(dto["logical_date"]) if dto["logical_date"] else None
+            )
+            if logical_date is not None and logical_date > timezone.utcnow():
+                graphs.append(None)
+                continue
+            dag = self._load_dag(dto["dag_id"], version)
+            if (
+                dag is None
+                or dag.partial
+                or dag.has_dynamic_nodes
+                or dag.deadline
+                or dag.dagrun_timeout is not None
+                or getattr(dag, "has_task_concurrency_limits", False)
+            ):
+                graphs.append(None)
+                continue
+            upstreams: dict[str, list[str]] = {}
+            for task in dag.task_dict.values():
+                if (
+                    task.deps != DEFAULT_OPERATOR_DEPS
+                    or getattr(task.trigger_rule, "value", task.trigger_rule)
+                    != "all_success"
+                    or task.depends_on_past
+                    or task.wait_for_downstream
+                    or task.wait_for_past_depends_before_skipping
+                    or task.max_active_tis_per_dag is not None
+                    or task.max_active_tis_per_dagrun is not None
+                    or task.get_needs_expansion()
+                    or task.inherits_from_skipmixin
+                    or task._can_skip_downstream
+                    or task._is_empty
+                    or task.is_setup
+                    or task.is_teardown
+                    or task.start_date is not None
+                    or task.end_date is not None
+                    or task.inlets
+                    or task.outlets
+                    or task.executor is not None
+                    or task.start_from_trigger
+                    or task.start_trigger_args is not None
+                    or task.on_failure_fail_dagrun
+                    or any(
+                        getattr(task, f"has_on_{event}_callback")
+                        for event in (
+                            "execute",
+                            "failure",
+                            "retry",
+                            "skipped",
+                            "success",
+                        )
+                    )
+                ):
+                    upstreams = {}
+                    break
+                upstreams[task.task_id] = sorted(task.upstream_task_ids)
+            graphs.append(
+                {
+                    "id": dto["id"],
+                    "dag_id": dto["dag_id"],
+                    "run_id": dto["run_id"],
+                    "upstreams": upstreams,
+                }
+                if upstreams
+                else None
+            )
+        return graphs
+
+    def between_phases(self, delegate_ids: list[int] | None = None) -> None:
         with create_session() as session:
             with prohibit_commit(session) as guard:
                 dag_runs = list(
@@ -454,6 +557,9 @@ class SchedulerPhases:
                         eagerly_load_dag_tags=self.runner._dag_tags_in_metrics,
                     )
                 )
+                if delegate_ids is not None:
+                    delegated = set(delegate_ids)
+                    dag_runs = [run for run in dag_runs if run.id in delegated]
                 self.runner._stamp_team_names(dag_runs, session)
                 callback_tuples = self.runner._schedule_all_dag_runs(
                     guard, dag_runs, session

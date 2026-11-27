@@ -1883,8 +1883,12 @@ with closing(sqlite3.connect("airflow.db")) as observer:
         ).fetchone()[0]
         assert len(graph_calls) == 3
         assert len(delegate_calls) == 3
-        assert [call[0]["id"] for call in graph_calls] == [run_pk] * 3
-        assert delegate_calls == [[], [], []]
+        assert [call[0]["id"] if call[0] else None for call in graph_calls] == [
+            run_pk,
+            run_pk,
+            None,
+        ]
+        assert delegate_calls == [[], [], [run_pk]]
 """
 
 

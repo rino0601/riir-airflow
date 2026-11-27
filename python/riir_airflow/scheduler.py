@@ -31,6 +31,7 @@ from airflow.utils.log.task_log_address import TaskLogContext, render_task_log_f
 from airflow.utils.session import NEW_SESSION, create_session
 from airflow.utils.state import DagRunState
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
+from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import dialect
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import make_transient
@@ -450,6 +451,7 @@ class SchedulerPhases:
         if (
             get_listener_manager().has_listeners
             or get_coordinator_manager().has_coordinators()
+            or not getattr(task_instance_mutation_hook, "is_noop", False)
         ):
             return [None] * len(dtos)
         graphs: list[dict | None] = []
@@ -463,6 +465,21 @@ class SchedulerPhases:
                 if latest is None or latest.id != version:
                     graphs.append(None)
                     continue
+            with create_session() as session:
+                due_retry = session.execute(
+                    select(TI.id)
+                    .where(
+                        TI.dag_id == dto["dag_id"],
+                        TI.run_id == dto["run_id"],
+                        TI.state == "up_for_retry",
+                        TI.retry_at.is_not(None),
+                        TI.retry_at <= timezone.utcnow(),
+                    )
+                    .limit(1)
+                ).first()
+            if due_retry is not None:
+                graphs.append(None)
+                continue
             logical_date = (
                 _datetime(dto["logical_date"]) if dto["logical_date"] else None
             )

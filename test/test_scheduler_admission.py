@@ -1897,6 +1897,189 @@ def test_native_scheduler_honors_retry_period(tmp_path: Path, mode: str):
     _run_probe(tmp_path, mode, _DEPENDENCY_DAG, _RETRY_PROBE)
 
 
+_CALLBACK_DAG = """\
+from pathlib import Path
+
+from airflow.sdk import DAG, task
+
+
+def note_success(context):
+    Path("dag_callback").write_text(context["dag_run"].run_id)
+
+
+with DAG(
+    "admission_probe",
+    schedule=None,
+    max_active_runs=1,
+    on_success_callback=note_success,
+) as dag:
+    @task
+    def upstream():
+        pass
+
+    @task
+    def downstream():
+        pass
+
+    upstream() >> downstream()
+"""
+
+_TERMINAL_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.dagrun import DagRun
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+case = mode.split("-", 1)[0]
+native = mode.endswith("native")
+job = Job()
+runner = NativeSchedulerJobRunner(job) if native else SchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+trigger_dag(
+    "admission_probe", run_id="probe",
+    run_after=timezone.utcnow() - timedelta(minutes=1),
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+
+delegate_calls = []
+update_calls = []
+callback_calls = []
+if native:
+    phases = runner.native_driver.phases
+    between = phases.between_phases
+
+    def observe_between(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return between(delegate_ids)
+
+    phases.between_phases = observe_between
+
+original_update_state = DagRun.update_state
+
+
+def observe_update_state(self, *args, **kwargs):
+    update_calls.append(self.run_id)
+    return original_update_state(self, *args, **kwargs)
+
+
+DagRun.update_state = observe_update_state
+
+
+def observe_callbacks(dag, callback=None):
+    if callback:
+        callback_calls.append((callback.dag_id, callback.msg))
+
+
+runner._send_dag_callbacks_to_processor = observe_callbacks
+
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    run_pk = observer.execute(
+        "SELECT id FROM dag_run WHERE run_id = 'probe'"
+    ).fetchone()[0]
+
+    def run_state():
+        return observer.execute(
+            "SELECT state, end_date FROM dag_run WHERE id = ?", (run_pk,)
+        ).fetchone()
+
+    def mark(task, state, retry_at=None):
+        with sqlite3.connect("airflow.db") as writable:
+            writable.execute(
+                "UPDATE task_instance SET state = ?, retry_at = ? "
+                "WHERE run_id = 'probe' AND task_id = ?",
+                (state, retry_at, task),
+            )
+
+    if case == "retry":
+        mark("upstream", "up_for_retry", (
+            timezone.utcnow() + timedelta(hours=1)
+        ).strftime("%Y-%m-%d %H:%M:%S.%f"))
+    else:
+        mark("upstream", "success")
+        if case != "unfinished":
+            mark("downstream", "failed" if case == "failure" else "success")
+
+    with sqlite3.connect("airflow.db") as writable:
+        writable.execute(
+            "UPDATE dag SET exceeds_max_non_backfill = 1 "
+            "WHERE dag_id = 'admission_probe'"
+        )
+
+    expected = {
+        "success": "success",
+        "failure": "failed",
+        "unfinished": "running",
+        "retry": "running",
+        "callback": "success",
+    }[case]
+    first = None
+    for _ in range(2):
+        iteration()
+        current = run_state()
+        assert current[0] == expected, (case, mode, current)
+        assert (current[1] is not None) == (expected in ("success", "failed"))
+        if first is None:
+            first = current
+        else:
+            assert current == first
+        assert observer.execute(
+            "SELECT last_scheduling_decision IS NOT NULL FROM dag_run WHERE id = ?",
+            (run_pk,),
+        ).fetchone() == (1,)
+
+    exceeds = observer.execute(
+        "SELECT exceeds_max_non_backfill FROM dag WHERE dag_id = 'admission_probe'"
+    ).fetchone()[0]
+    assert exceeds == (1 if expected == "running" else 0), (case, expected, exceeds)
+    if case == "callback":
+        assert callback_calls == [("admission_probe", "success")], (
+            callback_calls,
+            update_calls,
+            delegate_calls,
+        )
+        assert len(update_calls) == 1
+        if native:
+            assert delegate_calls == [[run_pk], []]
+    else:
+        assert callback_calls == []
+        if native:
+            assert update_calls == []
+            assert delegate_calls == [[], []]
+"""
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        f"{case}-{scheduler}"
+        for case in ("success", "failure", "unfinished", "retry", "callback")
+        for scheduler in ("baseline", "native")
+    ],
+)
+def test_native_scheduler_finalizes_task_outcomes(tmp_path: Path, mode: str):
+    dag_source = _CALLBACK_DAG if mode.startswith("callback") else _DEPENDENCY_DAG
+    _run_probe(tmp_path, mode, dag_source, _TERMINAL_PROBE)
+
+
 def test_database_path_keeps_relative_sqlite_url(monkeypatch):
     from airflow.configuration import conf
     from riir_airflow.scheduler import _database_path

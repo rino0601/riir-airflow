@@ -72,6 +72,9 @@ const NATIVE_TASK_REQUIREMENTS: &str = "NOT coalesce(d.has_task_concurrency_limi
 
 const SENTINEL_REGION: &str = "00000000000000000000000000000000";
 
+const UNFINISHED_TASK_STATES_SQL: &str = "'scheduled', 'queued', 'running', 'restarting',
+    'up_for_retry', 'up_for_reschedule', 'deferred', 'awaiting_input'";
+
 fn sql_error(error: rusqlite::Error) -> PyErr {
     PyRuntimeError::new_err(error.to_string())
 }
@@ -880,12 +883,16 @@ impl NativeScheduler {
             let version = optional_string(dto, "created_dag_version_id")?;
             let tis = dependency_tis(&transaction, &dag_id, &run_name)?;
             let mut success = HashSet::new();
+            let mut success_states = HashSet::new();
+            let mut failed_states = HashSet::new();
             let mut ready = Vec::new();
             let mut unsupported = tis.is_empty();
-            let mut unfinished = false;
+            let mut skipped = false;
+            let mut finished = true;
             let mut seen = HashSet::new();
             for ti in tis {
-                if !seen.insert(ti.task_id.clone()) || !graph.contains_key(&ti.task_id) {
+                let task_id = ti.task_id;
+                if !seen.insert(task_id.clone()) || !graph.upstreams.contains_key(&task_id) {
                     unsupported = true;
                     break;
                 }
@@ -901,12 +908,22 @@ impl NativeScheduler {
                 }
                 match ti.state.as_deref() {
                     Some("success") => {
-                        success.insert(ti.task_id);
+                        success.insert(task_id.clone());
+                        success_states.insert(task_id);
                     }
-                    Some("scheduled") | Some("queued") | Some("running") => unfinished = true,
+                    Some("skipped") => {
+                        skipped = true;
+                        success_states.insert(task_id);
+                    }
+                    Some("failed") | Some("upstream_failed") => {
+                        failed_states.insert(task_id);
+                    }
+                    Some("scheduled") | Some("queued") | Some("running") => {
+                        finished = false;
+                    }
                     None => {
-                        unfinished = true;
-                        ready.push((ti.id, ti.task_id));
+                        finished = false;
+                        ready.push((ti.id, task_id));
                     }
                     Some("up_for_retry") => match ti.retry_at.as_deref() {
                         None => {
@@ -914,10 +931,12 @@ impl NativeScheduler {
                             break;
                         }
                         Some(retry_at) if retry_at <= now => {
-                            unfinished = true;
-                            ready.push((ti.id, ti.task_id));
+                            finished = false;
+                            ready.push((ti.id, task_id));
                         }
-                        Some(_) => unfinished = true,
+                        Some(_) => {
+                            finished = false;
+                        }
                     },
                     _ => {
                         unsupported = true;
@@ -925,14 +944,92 @@ impl NativeScheduler {
                     }
                 }
             }
-            if unsupported || !unfinished || graph.keys().any(|task_id| !seen.contains(task_id)) {
+            if unsupported
+                || graph
+                    .upstreams
+                    .keys()
+                    .any(|task_id| !seen.contains(task_id))
+            {
                 delegate.push(run_id);
+                continue;
+            }
+            let terminal = if finished {
+                if graph.leaves.is_empty()
+                    || graph.leaves.iter().any(|task_id| !seen.contains(task_id))
+                {
+                    delegate.push(run_id);
+                    continue;
+                }
+                if graph
+                    .leaves
+                    .iter()
+                    .any(|task_id| failed_states.contains(task_id))
+                {
+                    Some("failed")
+                } else if graph
+                    .leaves
+                    .iter()
+                    .all(|task_id| success_states.contains(task_id))
+                {
+                    Some("success")
+                } else {
+                    delegate.push(run_id);
+                    continue;
+                }
+            } else {
+                if !failed_states.is_empty() || skipped {
+                    delegate.push(run_id);
+                    continue;
+                }
+                None
+            };
+            if let Some(state) = terminal {
+                let updated = match transaction.execute(
+                    &format!(
+                        "UPDATE dag_run AS r
+                         SET state = ?1, end_date = ?2, updated_at = ?2,
+                             last_scheduling_decision = ?2
+                         WHERE r.id = ?3 AND r.state = 'running'
+                             AND NOT EXISTS (
+                                 SELECT 1 FROM task_instance AS t
+                                 WHERE t.dag_id = r.dag_id AND t.run_id = r.run_id
+                                     AND t.working_set IS TRUE
+                                     AND (t.state IS NULL OR t.state IN ({UNFINISHED_TASK_STATES_SQL}))
+                             )"
+                    ),
+                    params![state, now, run_id],
+                ) {
+                    Ok(updated) => updated,
+                    Err(error) if is_busy(&error) => return Ok(None),
+                    Err(error) => return Err(sql_error(error)),
+                };
+                if updated != 1 {
+                    delegate.push(run_id);
+                    continue;
+                }
+                let updated = match transaction.execute(
+                    "UPDATE dag AS d
+                     SET exceeds_max_non_backfill = CASE WHEN (
+                             SELECT count(*) FROM dag_run AS r
+                             WHERE r.dag_id = d.dag_id AND r.run_type != 'backfill'
+                                 AND r.state IN ('queued', 'running')
+                         ) >= coalesce(d.max_active_runs, 0) THEN 1 ELSE 0 END
+                     WHERE d.dag_id = ?1",
+                    params![dag_id],
+                ) {
+                    Ok(updated) => updated,
+                    Err(error) if is_busy(&error) => return Ok(None),
+                    Err(error) => return Err(sql_error(error)),
+                };
+                if updated != 1 {
+                    return Ok(None);
+                }
                 continue;
             }
             let ready: Vec<String> = ready
                 .into_iter()
                 .filter(|(_, task_id)| {
-                    graph.get(task_id).is_some_and(|parents| {
+                    graph.upstreams.get(task_id).is_some_and(|parents| {
                         parents.iter().all(|parent| success.contains(parent))
                     })
                 })
@@ -1160,14 +1257,23 @@ fn supported_dependency_run(dto: &Bound<'_, PyDict>) -> PyResult<bool> {
     }
 }
 
-fn dependency_graph(entry: &Bound<'_, PyDict>) -> PyResult<HashMap<String, Vec<String>>> {
+struct DependencyGraph {
+    upstreams: HashMap<String, Vec<String>>,
+    leaves: HashSet<String>,
+}
+
+fn dependency_graph(entry: &Bound<'_, PyDict>) -> PyResult<DependencyGraph> {
     let binding = item(entry, "upstreams")?;
     let upstreams = binding.cast::<PyDict>()?;
-    let mut graph = HashMap::new();
+    let mut predecessors = HashMap::new();
     for (task_id, parents) in upstreams.iter() {
-        graph.insert(task_id.extract()?, parents.extract()?);
+        predecessors.insert(task_id.extract()?, parents.extract()?);
     }
-    Ok(graph)
+    let leaves: Vec<String> = item(entry, "leaves")?.extract()?;
+    Ok(DependencyGraph {
+        upstreams: predecessors,
+        leaves: leaves.into_iter().collect(),
+    })
 }
 
 fn dependency_tis(

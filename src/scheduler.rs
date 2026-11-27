@@ -769,11 +769,10 @@ impl NativeScheduler {
             return Ok(("committed".into(), 0));
         }
 
-        if !phases
-            .call_method1("prepare_dag_runs", (PyList::new(py, &candidates)?,))?
-            .is_truthy()?
-        {
-            return Ok(("fallback".into(), 0));
+        for candidate in &candidates {
+            if !supported_claim_run(candidate)? {
+                return Ok(("fallback".into(), 0));
+            }
         }
 
         let mut claimed = 0;
@@ -797,21 +796,6 @@ impl NativeScheduler {
             };
             if updated != 1 {
                 continue;
-            }
-            {
-                let dto = &candidate;
-                dto.set_item("state", "running")?;
-                dto.set_item("start_date", now)?;
-                dto.set_item("end_date", py.None())?;
-                dto.set_item("updated_at", now)?;
-            }
-            if !phases
-                .call_method1("dag_run_claimed", (candidate.clone(),))?
-                .is_truthy()?
-            {
-                return Err(PyValueError::new_err(
-                    "dag run claim callback rejected a committed candidate",
-                ));
             }
             claimed += 1;
         }
@@ -1212,6 +1196,35 @@ impl NativeScheduler {
             "committed".into(),
             usize::from(self.launch(workload, lease)?),
         ))
+    }
+}
+
+fn supported_claim_run(dto: &Bound<'_, PyDict>) -> PyResult<bool> {
+    if optional_i64(dto, "backfill_id")?.is_some() {
+        return Ok(false);
+    }
+    match optional_string(dto, "run_type")?.as_deref() {
+        Some("manual") => Ok(true),
+        Some("scheduled") => {
+            let timetable = optional_string(dto, "timetable_type")?;
+            Ok(
+                optional_string(dto, "triggered_by")?.as_deref() == Some("TIMETABLE")
+                    && matches!(
+                        timetable.as_deref(),
+                        Some(
+                            "CronDataIntervalTimetable"
+                                | "CronTriggerTimetable"
+                                | "DeltaDataIntervalTimetable"
+                                | "DeltaTriggerTimetable"
+                        )
+                    )
+                    && !bool_field(dto, "timetable_partitioned")?
+                    && !bool_field(dto, "timetable_asset_gated")?
+                    && optional_string(dto, "asset_expression")?.is_none()
+                    && optional_string(dto, "deadline")?.is_none(),
+            )
+        }
+        _ => Ok(false),
     }
 }
 

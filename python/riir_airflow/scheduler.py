@@ -34,7 +34,6 @@ from airflow.utils.types import DagRunTriggeredByType, DagRunType
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import dialect
 from sqlalchemy.engine import make_url
-from sqlalchemy.orm import make_transient
 from uuid6 import uuid7
 
 from riir_airflow import _lowlevel
@@ -170,7 +169,6 @@ class SchedulerPhases:
 
     def __init__(self, runner: SchedulerJobRunner):
         self.runner = runner
-        self._runs: dict[int, DagRun] = {}
 
     @property
     def dag_bag(self) -> DBDagBag:
@@ -384,68 +382,6 @@ class SchedulerPhases:
                 }
             )
         return prepared
-
-    def prepare_dag_runs(self, dtos: list[dict]) -> bool:
-        if any(
-            dto["run_type"] not in {"manual", "scheduled"}
-            or dto["backfill_id"] is not None
-            or (
-                dto["run_type"] == "scheduled"
-                and (
-                    dto["triggered_by"] != DagRunTriggeredByType.TIMETABLE.name
-                    or dto["timetable_type"] not in _SCHEDULE_TYPES
-                    or dto["timetable_partitioned"]
-                    or dto["timetable_asset_gated"]
-                    or dto["asset_expression"] is not None
-                    or dto["deadline"] is not None
-                )
-            )
-            for dto in dtos
-        ):
-            return False
-        if get_listener_manager().has_listeners:
-            return False
-        self._runs.clear()
-        for dto in dtos:
-            version = _uuid(dto["created_dag_version_id"])
-            dag = self._load_dag(dto["dag_id"], version)
-            if dag is None:
-                return False
-            run = DagRun(
-                dag_id=dto["dag_id"],
-                run_id=dto["run_id"],
-                logical_date=_datetime(dto["logical_date"]),
-                run_after=_datetime(dto["run_after"]),
-                start_date=_datetime(dto["start_date"]),
-                conf=_json(dto["conf"]),
-                run_type=dto["run_type"],
-                bundle_version=dto["bundle_version"],
-            )
-            run.id = dto["id"]
-            run._state = dto["state"]
-            run.start_date = _datetime(dto["start_date"])
-            run.end_date = _datetime(dto["end_date"])
-            run.updated_at = _datetime(dto["updated_at"])
-            run.clear_number = dto["clear_number"] or 0
-            run.log_template_id = dto["log_template_id"]
-            run.context_carrier = _json(dto["context_carrier"])
-            run.created_dag_version_id = version
-            run.triggered_by = dto["triggered_by"]
-            run.dag = dag
-            make_transient(run)
-            self._runs[dto["id"]] = run
-        return True
-
-    def dag_run_claimed(self, dto: dict) -> bool:
-        run = self._runs.get(dto["id"])
-        if run is None:
-            return False
-        run._state = dto["state"]
-        run.start_date = _datetime(dto["start_date"])
-        run.end_date = _datetime(dto["end_date"])
-        run.updated_at = _datetime(dto["updated_at"])
-        run.notify_dagrun_state_changed(msg="started")
-        return True
 
     def prepare_dependency_graphs(self, dtos: list[dict]) -> list[dict | None]:
         if (

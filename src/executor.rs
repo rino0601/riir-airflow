@@ -232,15 +232,13 @@ fn attempt_live(attempt: &Attempt) -> PyResult<bool> {
     if attempt.boot.as_deref() != Some(boot_id()?.as_str()) {
         return Ok(false);
     }
-    if let (Some(pid), Some(start)) = (attempt.process_group, &attempt.process_start) {
-        if process_start(pid).as_deref() != Some(start.as_str()) {
-            return Ok(false);
-        }
+    let supervisor = attempt
+        .process_group
+        .is_some_and(|pid| process_start(pid).as_deref() == attempt.process_start.as_deref());
+    if supervisor {
+        return Ok(true);
     }
-    for group in [attempt.process_group, attempt.task_group]
-        .into_iter()
-        .flatten()
-    {
+    if let Some(group) = attempt.task_group {
         if group_exists(group)? {
             return Ok(true);
         }
@@ -519,4 +517,25 @@ pub(crate) fn report_outcome(
     .map_err(error)?;
     tx.commit().map_err(error)?;
     Ok(204)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn live_task_group_keeps_dead_supervisor_claim() {
+        let attempt = Attempt {
+            id: String::new(),
+            generation: String::new(),
+            state: "running".to_owned(),
+            try_number: 1,
+            previous_job_id: None,
+            boot: Some(boot_id().unwrap()),
+            process_start: Some("stale".to_owned()),
+            process_group: Some(i32::MAX),
+            task_group: Some(unsafe { libc::getpgrp() }),
+        };
+        assert!(attempt_live(&attempt).unwrap());
+    }
 }

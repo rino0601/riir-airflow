@@ -56,7 +56,8 @@ def hold_tasks(runner):
 
 def release_task(database, runner):
     generation, = database.execute(
-        "SELECT generation FROM riir_attempt WHERE active = 1"
+        "SELECT external_executor_id FROM task_instance WHERE working_set IS TRUE "
+        "AND state IN ('queued', 'running') AND external_executor_id IS NOT NULL"
     ).fetchone()
     Path(f"release-{generation}").touch()
     runner.native_driver.native.wait_for_task()
@@ -162,8 +163,8 @@ with closing(sqlite3.connect("airflow.db")) as database:
     if mode == "native":
         assert not queue
         assert database.execute(
-            "SELECT t.run_id FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id "
-            "WHERE a.active = 1"
+            "SELECT run_id FROM task_instance WHERE working_set IS TRUE "
+            "AND state = 'queued' AND external_executor_id IS NOT NULL"
         ).fetchone() == ("older",)
     else:
         assert [workload.ti.run_id for workload in queue.values()] == ["older"]
@@ -305,7 +306,8 @@ with closing(sqlite3.connect("airflow.db")) as database:
         if mode == "native":
             assert not queue
             assert database.execute(
-                "SELECT id, job_id FROM riir_attempt WHERE active = 1"
+                "SELECT id, queued_by_job_id FROM task_instance WHERE working_set IS TRUE "
+                "AND state = 'queued' AND external_executor_id IS NOT NULL"
             ).fetchone() == (task_id, job_id)
         else:
             [(key, workload)] = queue.items()
@@ -491,7 +493,8 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     assert state("probe", "work") == ("scheduled", None, None)
     assert not queue
     assert observer.execute(
-        "SELECT count(*) FROM riir_attempt WHERE active = 1"
+        "SELECT count(*) FROM task_instance WHERE working_set IS TRUE "
+        "AND state = 'queued' AND external_executor_id IS NOT NULL"
     ).fetchone() == (0,)
 
     # Recover a #78-format queued attempt with a failed owner and no launch intent.
@@ -836,12 +839,19 @@ with sqlite3.connect("airflow.db") as database:
         "SELECT state FROM dag_run WHERE run_id = 'probe'"
     ).fetchone() == ("running",)
     assert database.execute(
-        "SELECT count(*) FROM riir_attempt"
+        "SELECT count(*) FROM log WHERE event = 'queued' "
+        "AND json_extract(extra, '$.executor_id') IS NOT NULL"
     ).fetchone() == (1,)
-    owner = database.execute("SELECT job_id FROM riir_attempt").fetchone()
+    owner = database.execute(
+        "SELECT json_extract(extra, '$.job_id') FROM log WHERE event = 'queued' "
+        "AND json_extract(extra, '$.executor_id') IS NOT NULL"
+    ).fetchone()
     assert database.execute(
         "SELECT state FROM job WHERE id = ?", (owner[0],)
     ).fetchone() == ("success",)
+    assert database.execute(
+        "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'riir_attempt'"
+    ).fetchone() == (0,)
 """
 
 

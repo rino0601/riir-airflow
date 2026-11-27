@@ -207,7 +207,6 @@ impl NativeScheduler {
         connection
             .execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;")
             .map_err(sql_error)?;
-        executor::initialize(&connection).map_err(sql_error)?;
         let executor = Executor::new(path.canonicalize().map_err(executor::error)?);
         Ok(Self {
             connection,
@@ -283,7 +282,13 @@ impl NativeScheduler {
         let sql = format!(
             "SELECT {TASK_COLUMNS},
                 t.queued_by_job_id AS previous_job_id,
-                coalesce(t.state = 'queued' AND {NATIVE_TASK_REQUIREMENTS}, 0) AS supported
+                coalesce(t.state = 'queued' AND (
+                    (t.external_executor_id IS NOT NULL AND EXISTS (
+                        SELECT 1 FROM log AS l WHERE l.task_instance_id = t.id
+                            AND l.event = 'queued'
+                            AND json_extract(l.extra, '$.executor_id') = t.external_executor_id))
+                    OR {NATIVE_TASK_REQUIREMENTS}
+                ), 0) AS supported
             FROM task_instance AS t
             JOIN dag_run AS r ON r.dag_id = t.dag_id AND r.run_id = t.run_id
             JOIN dag AS d ON d.dag_id = t.dag_id
@@ -345,13 +350,7 @@ impl NativeScheduler {
     }
 
     fn active_task(&self) -> PyResult<Option<String>> {
-        use rusqlite::OptionalExtension;
-        self.connection
-            .query_row("SELECT id FROM riir_attempt WHERE active = 1", [], |row| {
-                row.get(0)
-            })
-            .optional()
-            .map_err(sql_error)
+        executor::active_task(&self.connection).map_err(sql_error)
     }
     fn wait_for_task(&mut self) -> PyResult<()> {
         self.executor.wait(&mut self.connection)
@@ -615,7 +614,6 @@ fn prepare_workload(
     let (generation, python, payload) = launch.extract()?;
     Ok(Some(Workload {
         id: item(dto, "id")?.extract()?,
-        try_number: item(dto, "try_number")?.extract()?,
         generation,
         python,
         payload,

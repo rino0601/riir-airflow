@@ -217,7 +217,12 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
                     api_log,
                 )
                 attempt, owner, group, task_group = db.execute(
-                    "SELECT id, job_id, pgid, task_pgid FROM riir_attempt WHERE active = 1"
+                    "SELECT t.id, t.queued_by_job_id, "
+                    "json_extract(l.extra, '$.process_group'), "
+                    "json_extract(l.extra, '$.task_group') "
+                    "FROM task_instance AS t JOIN log AS l ON l.task_instance_id = t.id "
+                    "AND l.event = 'queued' WHERE t.state = 'running' "
+                    "AND t.external_executor_id IS NOT NULL"
                 ).fetchone()
                 first.kill()
                 first.wait(timeout=10)
@@ -234,8 +239,9 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
                         replacement_log,
                     )
                     os.kill(group, 0)
-                    os.killpg(task_group, 0)
-                    assert group != task_group
+                    os.killpg(group, 0)
+                    os.killpg(int(task_group), 0)
+                    assert group != int(task_group)
                     assert db.execute(
                         "SELECT queued_by_job_id, state FROM task_instance WHERE id = ?",
                         (attempt,),
@@ -252,10 +258,14 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
                         api_log,
                     )
                     _wait_for(
-                        lambda: db.execute(
-                            "SELECT 1 FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id "
-                            "WHERE t.run_id = 'defer' AND a.active = 0"
-                        ).fetchone(),
+                        lambda: (
+                            db.execute(
+                                "SELECT json_extract(l.extra, '$.delegated') "
+                                "FROM task_instance AS t JOIN log AS l ON l.task_instance_id = t.id "
+                                "WHERE t.run_id = 'defer' AND l.event = 'queued'"
+                            ).fetchone()
+                            == (1,)
+                        ),
                         replacement_log,
                         api_log,
                     )
@@ -268,7 +278,7 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
                     "SELECT 1 FROM task_instance WHERE id = ? AND state = 'running'",
                     (attempt,),
                 ).fetchone():
-                    for process_group in (task_group, group):
+                    for process_group in (int(task_group), group):
                         try:
                             os.killpg(process_group, signal.SIGKILL)
                         except ProcessLookupError:
@@ -285,23 +295,26 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
             "defer:1",
         ]
         assert db.execute(
-            "SELECT t.run_id, t.try_number, t.state, t.working_set, l.event, a.writer "
-            "FROM task_instance t JOIN riir_attempt a ON a.id = t.id "
-            "JOIN log l ON l.task_instance_id = t.id AND l.event IN "
-            "('up_for_retry', 'success', 'skipped', 'failed') ORDER BY l.id"
+            "SELECT t.run_id, t.try_number, t.state, t.working_set, l.event, "
+            "json_extract(l.extra, '$.executor_id') IS NOT NULL, "
+            "json_extract(l.extra, '$.report') IS NOT NULL "
+            "FROM task_instance t JOIN log l ON l.task_instance_id = t.id AND l.event IN "
+            "('up_for_retry', 'success', 'skipped', 'failed') "
+            "AND json_extract(l.extra, '$.executor_id') IS NOT NULL ORDER BY l.id"
         ).fetchall() == [
-            ("success", 1, "success", 1, "success", "rust"),
-            ("skip", 1, "skipped", 1, "skipped", "rust"),
-            ("retry", 1, "failed", None, "up_for_retry", "rust"),
-            ("retry", 2, "success", 1, "success", "rust"),
-            ("failure", 1, "failed", None, "up_for_retry", "rust"),
-            ("failure", 2, "failed", 1, "failed", "rust"),
-            ("restart", 1, "success", 1, "success", "rust"),
+            ("success", 1, "success", 1, "success", 1, 1),
+            ("skip", 1, "skipped", 1, "skipped", 1, 1),
+            ("retry", 1, "failed", None, "up_for_retry", 1, 1),
+            ("retry", 2, "success", 1, "success", 1, 1),
+            ("failure", 1, "failed", None, "up_for_retry", 1, 1),
+            ("failure", 2, "failed", 1, "failed", 1, 1),
+            ("restart", 1, "success", 1, "success", 1, 1),
         ]
         assert db.execute(
-            "SELECT t.state, a.writer, a.receipt FROM task_instance AS t "
-            "JOIN riir_attempt AS a ON a.id = t.id WHERE t.run_id = 'defer'"
-        ).fetchone() == ("deferred", "airflow", None)
+            "SELECT t.state, json_extract(l.extra, '$.delegated') "
+            "FROM task_instance AS t JOIN log AS l ON l.task_instance_id = t.id "
+            "WHERE t.run_id = 'defer' AND l.event = 'queued'"
+        ).fetchone() == ("deferred", 1)
         assert db.execute("SELECT count(*) FROM trigger").fetchone() == (1,)
         assert db.execute(
             "SELECT count(*) FROM log WHERE event = 'deferred'"
@@ -310,8 +323,12 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
             "SELECT count(*) FROM asset_event WHERE source_dag_id = 'asset_execution'"
         ).fetchone() == (1,)
         assert db.execute(
-            "SELECT count(*) FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id "
-            "WHERE t.run_id = 'asset'"
+            "SELECT count(*) FROM task_instance AS t JOIN log AS l ON l.task_instance_id = t.id "
+            "WHERE t.run_id = 'asset' AND l.event = 'queued' "
+            "AND json_extract(l.extra, '$.executor_id') IS NOT NULL"
+        ).fetchone() == (0,)
+        assert db.execute(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'riir_attempt'"
         ).fetchone() == (0,)
         _assert_fenced_receipts(db, database)
         atomicity_database = tmp_path / "atomicity.db"
@@ -326,36 +343,47 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
             _assert_retry_is_atomic(copy, atomicity_database)
 
 
-def _assert_fenced_receipts(db, database):
-    # Replay the archived retry report under its simulated supervisor identity.
-    attempt, generation, receipt = db.execute(
-        "SELECT a.id, a.generation, a.receipt FROM riir_attempt AS a "
-        "JOIN task_instance AS t ON t.id = a.id WHERE t.run_id = 'retry' AND t.try_number = 1"
-    ).fetchone()
+def _supervisor_identity(db, attempt, generation):
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text()
     start = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
     db.execute(
-        "UPDATE riir_attempt SET pgid = ?, process_start = ? WHERE generation = ?",
-        (os.getpid(), start, generation),
+        "UPDATE log SET extra = json_set(extra, '$.boot_id', ?, '$.process_start', ?) "
+        "WHERE task_instance_id = ? AND event = 'queued' "
+        "AND json_extract(extra, '$.executor_id') = ?",
+        (boot, start, attempt, generation),
     )
 
-    def report(generation, payload):
-        return _lowlevel.report_outcome(
-            str(database),
-            generation,
-            attempt,
-            payload,
-            "64a72def22874711a9ee11aa441121f4",
-            None,
-            "2026-01-01 00:00:00.000000",
-        )
 
-    assert report(generation, receipt) == 204
-    assert report(generation, receipt.replace("up_for_retry", "failed")) == 409
-    assert report("missing-generation", receipt) == 409
+def _report(db, database, generation, attempt, payload, retry_at=None):
+    return _lowlevel.report_outcome(
+        str(database),
+        generation,
+        attempt,
+        payload,
+        "64a72def22874711a9ee11aa441121f4",
+        retry_at,
+        "2026-01-01 00:00:00.000000",
+    )
+
+
+def _assert_fenced_receipts(db, database):
+    attempt, generation, receipt = db.execute(
+        "SELECT t.id, t.external_executor_id, json_extract(l.extra, '$.report') "
+        "FROM task_instance AS t JOIN log AS l ON l.task_instance_id = t.id "
+        "AND l.event = 'up_for_retry' WHERE t.run_id = 'retry' AND t.try_number = 1"
+    ).fetchone()
+    _supervisor_identity(db, attempt, generation)
+
+    assert _report(db, database, generation, attempt, receipt) == 204
+    assert (
+        _report(
+            db, database, generation, attempt, receipt.replace("up_for_retry", "failed")
+        )
+        == 409
+    )
+    assert _report(db, database, "missing-generation", attempt, receipt) == 409
     assert db.execute(
-        "SELECT a.successor_id = t.id FROM riir_attempt AS a JOIN task_instance AS t "
-        "ON t.run_id = 'retry' AND t.try_number = 2 WHERE a.generation = ?",
-        (generation,),
+        "SELECT count(*) FROM task_instance WHERE run_id = 'retry' AND try_number = 2"
     ).fetchone() == (1,)
     assert db.execute(
         "SELECT count(*) FROM task_instance WHERE run_id = 'retry'"
@@ -368,40 +396,50 @@ def _assert_fenced_receipts(db, database):
 
 def _assert_retry_is_atomic(db, database):
     attempt, generation = db.execute(
-        "SELECT a.id, a.generation FROM riir_attempt AS a "
-        "JOIN task_instance AS t ON t.id = a.id WHERE t.run_id = 'success'"
+        "SELECT t.id, t.external_executor_id FROM task_instance AS t "
+        "JOIN log AS l ON l.task_instance_id = t.id AND l.event = 'queued' "
+        "WHERE t.run_id = 'success'"
     ).fetchone()
-    start = Path("/proc/self/stat").read_text().rsplit(")", 1)[1].split()[19]
-    db.execute(
-        "UPDATE riir_attempt SET active = 1, pgid = ?, process_start = ?, "
-        "writer = NULL, receipt = NULL WHERE generation = ?",
-        (os.getpid(), start, generation),
-    )
+    _supervisor_identity(db, attempt, generation)
     db.execute("UPDATE task_instance SET state = 'running' WHERE id = ?", (attempt,))
+    with subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True
+    ) as task_group:
+        db.execute(
+            "UPDATE log SET extra = json_set(extra, '$.task_group', ?) "
+            "WHERE task_instance_id = ? AND event = 'queued' "
+            "AND json_extract(extra, '$.executor_id') = ?",
+            (task_group.pid, attempt, generation),
+        )
+        assert (
+            _lowlevel.register_task_group(str(database), generation, task_group.pid)
+            is True
+        )
+        assert (
+            _lowlevel.register_task_group(str(database), generation, task_group.pid)
+            is True
+        )
     end = "2026-01-01 00:00:01.000000"
     retry_at = "2026-01-01 00:00:03.000000"
     successor = "64a72def22874711a9ee11aa441121f4"
+    payload = (
+        '{"state":"up_for_retry","end_date":"'
+        + end
+        + '","retry_delay_seconds":2,"retry_reason":"retry reason"}'
+    )
     db.execute(
         "INSERT INTO task_instance_note (ti_id, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
         (attempt, "keep this note", end, end),
     )
     db.execute(
-        "CREATE TRIGGER reject_receipt BEFORE UPDATE OF receipt ON riir_attempt "
+        "CREATE TRIGGER reject_receipt BEFORE INSERT ON log "
+        f"WHEN NEW.task_instance_id = '{attempt}' "
+        "AND NEW.event IN ('up_for_retry', 'success', 'skipped', 'failed') "
         "BEGIN SELECT raise(ABORT, 'test rejected receipt'); END"
     )
 
     def report():
-        return _lowlevel.report_outcome(
-            str(database),
-            generation,
-            attempt,
-            '{"state":"up_for_retry","end_date":"'
-            + end
-            + '","retry_delay_seconds":2,"retry_reason":"retry reason"}',
-            successor,
-            retry_at,
-            end,
-        )
+        return _report(db, database, generation, attempt, payload, retry_at)
 
     with pytest.raises(RuntimeError, match="test rejected receipt"):
         report()

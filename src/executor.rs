@@ -17,32 +17,9 @@ pub(crate) fn error(err: impl std::fmt::Display) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
 }
 
-pub(crate) fn initialize(db: &Connection) -> rusqlite::Result<()> {
-    db.execute_batch(
-        "CREATE TABLE IF NOT EXISTS riir_attempt (
-            id TEXT NOT NULL REFERENCES task_instance(id) ON DELETE CASCADE,
-            generation TEXT PRIMARY KEY,
-            job_id INTEGER NOT NULL,
-            try_number INTEGER NOT NULL,
-            previous_job_id INTEGER,
-            pgid INTEGER,
-            task_pgid INTEGER,
-            boot_id TEXT,
-            process_start TEXT,
-            active INTEGER NOT NULL DEFAULT 1,
-            writer TEXT,
-            receipt TEXT,
-            successor_id TEXT
-        );
-        CREATE UNIQUE INDEX IF NOT EXISTS riir_single_slot ON riir_attempt(active)
-            WHERE active = 1;",
-    )
-}
-
 pub(crate) struct Workload {
     pub(crate) id: String,
     pub(crate) generation: String,
-    pub(crate) try_number: i64,
     pub(crate) python: PathBuf,
     pub(crate) payload: String,
 }
@@ -55,18 +32,72 @@ impl Workload {
         previous_job_id: Option<i64>,
     ) -> rusqlite::Result<()> {
         tx.execute(
-            "INSERT INTO riir_attempt (id, generation, job_id, try_number, previous_job_id)
-            VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![
-                self.id,
-                self.generation,
-                job_id,
-                self.try_number,
-                previous_job_id
-            ],
+            "UPDATE task_instance SET external_executor_id = ?1 WHERE id = ?2",
+            params![self.generation, self.id],
+        )?;
+        tx.execute(
+            "INSERT INTO log (dttm, event, task_instance_id, task_id, dag_id, run_id,
+                              map_index, try_number, logical_date, owner, extra)
+             SELECT CURRENT_TIMESTAMP, 'queued', t.id, t.task_id, t.dag_id, t.run_id,
+                    t.region_index, t.try_number, r.logical_date, nullif(d.owners, ''),
+                    json_object('executor_id', ?1, 'job_id', ?2, 'previous_job_id', ?3)
+             FROM task_instance AS t
+             JOIN dag_run AS r ON r.dag_id = t.dag_id AND r.run_id = t.run_id
+             JOIN dag AS d ON d.dag_id = t.dag_id
+             WHERE t.id = ?4",
+            params![self.generation, job_id, previous_job_id, self.id],
         )?;
         Ok(())
     }
+}
+
+struct Attempt {
+    id: String,
+    generation: String,
+    state: String,
+    try_number: i64,
+    previous_job_id: Option<i64>,
+    boot: Option<String>,
+    process_start: Option<String>,
+    process_group: Option<i32>,
+    task_group: Option<i32>,
+}
+
+fn active_attempt(db: &Connection) -> rusqlite::Result<Option<Attempt>> {
+    db.query_row(
+        "SELECT t.id, t.external_executor_id, t.state, t.try_number,
+                json_extract(l.extra, '$.previous_job_id'),
+                json_extract(l.extra, '$.boot_id'),
+                json_extract(l.extra, '$.process_start'),
+                json_extract(l.extra, '$.process_group'),
+                json_extract(l.extra, '$.task_group')
+         FROM task_instance AS t
+         JOIN log AS l ON l.task_instance_id = t.id AND l.event = 'queued'
+             AND json_extract(l.extra, '$.executor_id') = t.external_executor_id
+         WHERE t.working_set IS TRUE AND t.external_executor_id IS NOT NULL
+             AND t.state IN ('queued', 'running', 'restarting')
+             AND t.queued_by_job_id IS NOT NULL
+         ORDER BY l.id DESC LIMIT 1",
+        [],
+        |row| {
+            Ok(Attempt {
+                id: row.get(0)?,
+                generation: row.get(1)?,
+                state: row.get(2)?,
+                try_number: row.get(3)?,
+                previous_job_id: row.get(4)?,
+                boot: row.get(5)?,
+                process_start: row.get(6)?,
+                process_group: row.get(7)?,
+                task_group: row.get(8)?,
+            })
+        },
+    )
+    .optional()
+}
+
+pub(crate) fn active_task(db: &Connection) -> rusqlite::Result<Option<String>> {
+    Ok(active_attempt(db)?.map(|attempt| attempt.id))
 }
 
 pub(crate) struct Executor {
@@ -103,8 +134,6 @@ impl Executor {
             .write(true)
             .open(&self.lease_path)
             .map_err(error)?;
-        // The supervisor inherits this open file description. Closing the parent's
-        // copy leaves the lock held even when the scheduler is killed.
         if unsafe { libc::flock(lease.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
             let err = io::Error::last_os_error();
             return if err.kind() == io::ErrorKind::WouldBlock {
@@ -114,44 +143,26 @@ impl Executor {
             };
         }
 
-        let active = db
-            .query_row(
-                "SELECT generation, pgid, task_pgid, boot_id FROM riir_attempt WHERE active = 1",
-                [],
-                |row| {
-                    Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, Option<i32>>(1)?,
-                        row.get::<_, Option<i32>>(2)?,
-                        row.get::<_, Option<String>>(3)?,
-                    ))
-                },
-            )
-            .optional()
-            .map_err(error)?;
-        if let Some((generation, pgid, task_pgid, boot)) = active {
-            if boot.as_deref() == Some(boot_id()?.as_str()) {
-                for group in [pgid, task_pgid].into_iter().flatten() {
-                    if group_exists(group)? {
-                        return Ok(None);
-                    }
-                }
-            }
-            let tx = match db.transaction_with_behavior(TransactionBehavior::Immediate) {
-                Ok(tx) => tx,
-                Err(err)
-                    if matches!(
-                        err.sqlite_error_code(),
-                        Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
-                    ) =>
-                {
-                    return Ok(None);
-                }
-                Err(err) => return Err(error(err)),
-            };
-            finish_lost(&tx, &generation, pgid.is_some()).map_err(error)?;
-            tx.commit().map_err(error)?;
+        let Some(attempt) = active_attempt(db).map_err(error)? else {
+            return Ok(Some(lease));
+        };
+        if attempt_live(&attempt).map_err(error)? {
+            return Ok(None);
         }
+        let tx = match db.transaction_with_behavior(TransactionBehavior::Immediate) {
+            Ok(tx) => tx,
+            Err(err)
+                if matches!(
+                    err.sqlite_error_code(),
+                    Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked)
+                ) =>
+            {
+                return Ok(None);
+            }
+            Err(err) => return Err(error(err)),
+        };
+        finish_lost(&tx, &attempt).map_err(error)?;
+        tx.commit().map_err(error)?;
         Ok(Some(lease))
     }
 
@@ -174,7 +185,6 @@ impl Executor {
             .arg(fd.to_string())
             .stdin(Stdio::piped())
             .process_group(0);
-        // Only the spawned supervisor should inherit the lease.
         unsafe {
             command.pre_exec(move || {
                 if libc::fcntl(fd, libc::F_SETFD, 0) == -1 {
@@ -194,13 +204,15 @@ fn boot_id() -> PyResult<String> {
     fs::read_to_string("/proc/sys/kernel/random/boot_id").map_err(error)
 }
 
-fn own_process_start() -> PyResult<String> {
-    // /proc stat field 22 is the start time in ticks since boot. The process
-    // name may contain whitespace and parentheses, so skip its final ')'.
-    let stat = fs::read_to_string("/proc/self/stat").map_err(error)?;
+fn process_start(pid: i32) -> Option<String> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
     stat.rsplit_once(')')
         .and_then(|(_, fields)| fields.split_whitespace().nth(19))
         .map(str::to_owned)
+}
+
+fn own_process_start() -> PyResult<String> {
+    process_start(std::process::id() as i32)
         .ok_or_else(|| error("cannot read native task process start time"))
 }
 
@@ -216,35 +228,48 @@ fn group_exists(pgid: i32) -> PyResult<bool> {
     }
 }
 
-fn finish_lost(tx: &Transaction<'_>, generation: &str, started: bool) -> rusqlite::Result<()> {
-    // Once a supervisor (and its group) has gone, ordinary Airflow orphan
-    // handling may reset a running/restarting attempt. A queued attempt never
-    // entered the API and can be put back without incrementing its try number.
-    tx.execute(
-        "UPDATE task_instance AS t SET
-            state = CASE WHEN a.previous_job_id IS NULL THEN 'scheduled' ELSE 'queued' END,
-            queued_by_job_id = a.previous_job_id,
-            queued_dttm = CASE WHEN a.previous_job_id IS NULL THEN NULL ELSE queued_dttm END
-         FROM riir_attempt AS a WHERE a.generation = ?1 AND a.writer IS NULL
-            AND t.id = a.id AND t.working_set IS TRUE AND t.try_number = a.try_number
-            AND t.queued_by_job_id = a.job_id AND t.state = 'queued'",
-        [generation],
-    )?;
-    if started {
-        // Release the dead running attempt to Airflow's ordinary heartbeat
-        // handling when the owning job is still current, and orphan recovery
-        // otherwise. An outcome already committed remains authoritative.
-        tx.execute(
-            "UPDATE task_instance AS t SET last_heartbeat_at = '1970-01-01 00:00:00.000000'
-             FROM riir_attempt AS a WHERE a.generation = ?1 AND a.writer IS NULL
-                AND t.id = a.id AND t.working_set IS TRUE AND t.try_number = a.try_number
-                AND t.queued_by_job_id = a.job_id AND t.state IN ('running', 'restarting')",
-            [generation],
-        )?;
+fn attempt_live(attempt: &Attempt) -> PyResult<bool> {
+    if attempt.boot.as_deref() != Some(boot_id()?.as_str()) {
+        return Ok(false);
     }
+    if let (Some(pid), Some(start)) = (attempt.process_group, &attempt.process_start) {
+        if process_start(pid).as_deref() != Some(start.as_str()) {
+            return Ok(false);
+        }
+    }
+    for group in [attempt.process_group, attempt.task_group]
+        .into_iter()
+        .flatten()
+    {
+        if group_exists(group)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn finish_lost(tx: &Transaction<'_>, attempt: &Attempt) -> rusqlite::Result<()> {
+    let started = matches!(attempt.state.as_str(), "running" | "restarting");
     tx.execute(
-        "UPDATE riir_attempt SET active = 0 WHERE generation = ?1",
-        [generation],
+        "UPDATE task_instance SET
+            state = CASE WHEN ?1 THEN state WHEN ?2 IS NULL THEN 'scheduled' ELSE 'queued' END,
+            queued_by_job_id = CASE WHEN ?1 THEN queued_by_job_id ELSE ?2 END,
+            queued_dttm = CASE WHEN ?1 THEN queued_dttm
+                WHEN ?2 IS NULL THEN NULL ELSE queued_dttm END,
+            external_executor_id = NULL,
+            last_heartbeat_at = CASE WHEN ?1 THEN '1970-01-01 00:00:00.000000'
+                ELSE last_heartbeat_at END,
+            updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?3 AND external_executor_id = ?4 AND working_set IS TRUE
+             AND try_number = ?5 AND state = ?6",
+        params![
+            started,
+            attempt.previous_job_id,
+            attempt.id,
+            attempt.generation,
+            attempt.try_number,
+            attempt.state
+        ],
     )?;
     Ok(())
 }
@@ -257,54 +282,78 @@ fn open(path: &Path) -> PyResult<Connection> {
     Ok(db)
 }
 
+fn queued_log(
+    db: &Connection,
+    generation: &str,
+    state_filter: &str,
+) -> rusqlite::Result<Option<(i64, Option<i64>)>> {
+    let sql = format!(
+        "SELECT l.id, json_extract(l.extra, '$.task_group')
+         FROM log AS l JOIN task_instance AS t ON t.id = l.task_instance_id
+         WHERE l.event = 'queued' AND json_extract(l.extra, '$.executor_id') = ?1
+             AND t.external_executor_id = ?1 AND t.working_set IS TRUE
+             AND t.state IN ({state_filter}) AND t.try_number = l.try_number
+         ORDER BY l.id DESC LIMIT 1"
+    );
+    db.query_row(&sql, params![generation], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    })
+    .optional()
+}
+
 #[pyfunction]
 pub(crate) fn register_attempt(path: PathBuf, generation: String) -> PyResult<bool> {
-    let pid = std::process::id();
-    if unsafe { libc::getpgrp() } != pid as i32 {
+    if unsafe { libc::getpgrp() } != std::process::id() as i32 {
         return Ok(false);
     }
     let db = open(&path)?;
+    let log = queued_log(&db, &generation, "'queued'").map_err(error)?;
+    let Some((id, _)) = log else {
+        return Ok(false);
+    };
+    let pid = std::process::id() as i32;
+    let boot = boot_id()?;
+    let start = own_process_start()?;
     db.execute(
-        "UPDATE riir_attempt AS a SET pgid = ?1, boot_id = ?2, process_start = ?3
-         WHERE generation = ?4 AND active = 1 AND pgid IS NULL
-            AND EXISTS (SELECT 1 FROM task_instance AS t
-                WHERE t.id = a.id AND t.working_set IS TRUE AND t.state = 'queued'
-                    AND t.try_number = a.try_number AND t.queued_by_job_id = a.job_id)",
-        params![pid, boot_id()?, own_process_start()?, generation],
+        "UPDATE log SET extra = json_set(extra, '$.boot_id', ?1, '$.process_start', ?2,
+                                          '$.process_group', ?3)
+         WHERE id = ?4 AND json_extract(extra, '$.executor_id') = ?5
+             AND (json_extract(extra, '$.boot_id') IS NULL OR json_extract(extra, '$.boot_id') = ?1)
+             AND (json_extract(extra, '$.process_start') IS NULL
+                  OR json_extract(extra, '$.process_start') = ?2)
+             AND (json_extract(extra, '$.process_group') IS NULL
+                  OR json_extract(extra, '$.process_group') = ?3)",
+        params![boot, start, pid, id, generation],
     )
     .map(|count| count == 1)
     .map_err(error)
 }
 
-/// The SDK gives the actual task runner a separate process group. Save it
-/// before forwarding /run, since the supervisor may die while that group lives.
 #[pyfunction]
 pub(crate) fn register_task_group(path: PathBuf, generation: String, pid: i32) -> PyResult<bool> {
     if pid <= 1 || unsafe { libc::getpgid(pid) } != pid {
         return Ok(false);
     }
     let db = open(&path)?;
+    let log = queued_log(&db, &generation, "'queued', 'running'").map_err(error)?;
+    let Some((id, group)) = log else {
+        return Ok(false);
+    };
+    let boot = boot_id()?;
+    let start = own_process_start()?;
     db.execute(
-        "UPDATE riir_attempt AS a SET task_pgid = ?1
-         WHERE generation = ?2 AND active = 1 AND pgid = ?3
-            AND boot_id = ?4 AND process_start = ?5
-            AND (task_pgid IS NULL OR task_pgid = ?1)
-            AND EXISTS (SELECT 1 FROM task_instance AS t
-                WHERE t.id = a.id AND t.working_set IS TRUE AND t.state IN ('queued', 'running')
-                    AND t.try_number = a.try_number AND t.queued_by_job_id = a.job_id)",
-        params![
-            pid,
-            generation,
-            std::process::id(),
-            boot_id()?,
-            own_process_start()?
-        ],
+        "UPDATE log SET extra = json_set(extra, '$.task_group', ?1)
+         WHERE id = ?2 AND json_extract(extra, '$.executor_id') = ?3
+             AND json_extract(extra, '$.boot_id') = ?4
+             AND json_extract(extra, '$.process_start') = ?5
+             AND (json_extract(extra, '$.task_group') IS NULL
+                  OR json_extract(extra, '$.task_group') = ?1)",
+        params![pid, id, generation, boot, start],
     )
-    .map(|count| count == 1)
+    .map(|count| count == 1 && group.is_none_or(|value| value == i64::from(pid)))
     .map_err(error)
 }
 
-/// Return the HTTP status for a native result, or zero for SDK-owned forwarding.
 #[pyfunction]
 pub(crate) fn report_outcome(
     path: PathBuf,
@@ -331,44 +380,50 @@ pub(crate) fn report_outcome(
         .map_err(error)?;
     let row = tx
         .query_row(
-            "SELECT a.writer, a.receipt, a.active, a.pgid, t.state, a.boot_id, a.process_start,
-          t.working_set IS TRUE AND t.try_number = a.try_number AND t.queued_by_job_id = a.job_id
-         FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id
-         WHERE a.generation = ?1 AND a.id = ?2",
+            "SELECT t.state, t.working_set IS TRUE, l.id,
+                    json_extract(l.extra, '$.boot_id'),
+                    json_extract(l.extra, '$.process_start'),
+                    json_extract(l.extra, '$.delegated')
+             FROM task_instance AS t JOIN log AS l ON l.task_instance_id = t.id
+                 AND l.event = 'queued' AND json_extract(l.extra, '$.executor_id') = ?1
+             WHERE t.id = ?2 AND t.external_executor_id = ?1",
             params![generation, id],
             |row| {
                 Ok((
                     row.get::<_, Option<String>>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    row.get::<_, bool>(2)?,
-                    row.get::<_, Option<u32>>(3)?,
+                    row.get::<_, Option<bool>>(1)?.unwrap_or(false),
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, Option<String>>(3)?,
                     row.get::<_, Option<String>>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, Option<String>>(6)?,
-                    row.get::<_, Option<bool>>(7)?.unwrap_or(false),
+                    row.get::<_, Option<i64>>(5)?,
                 ))
             },
         )
         .optional()
         .map_err(error)?;
-    let Some((owner, receipt, active, pid, previous, boot, start, current)) = row else {
+    let Some((previous, current, log_id, boot, start, delegated)) = row else {
         return Ok(409);
     };
-    if pid != Some(std::process::id())
-        || boot.as_deref() != Some(boot_id()?.as_str())
+    if boot.as_deref() != Some(boot_id()?.as_str())
         || start.as_deref() != Some(own_process_start()?.as_str())
     {
         return Ok(409);
     }
+    let receipt: Option<String> = tx
+        .query_row(
+            "SELECT json_extract(extra, '$.report') FROM log
+             WHERE task_instance_id = ?1 AND event = ?2
+                 AND json_extract(extra, '$.executor_id') = ?3
+             ORDER BY id DESC LIMIT 1",
+            params![id, state, generation],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(error)?;
     if let Some(receipt) = receipt {
         return Ok(if receipt == payload { 204 } else { 409 });
     }
-    if !active {
-        return Ok(409);
-    }
-    if owner.as_deref() == Some("airflow") {
-        // The entire API request, including its own duplicate handling, remains
-        // with Airflow after delegation, even if the previous response was lost.
+    if delegated == Some(1) {
         return Ok(0);
     }
     if !current
@@ -379,8 +434,8 @@ pub(crate) fn report_outcome(
     }
     if !native {
         tx.execute(
-            "UPDATE riir_attempt SET writer = 'airflow' WHERE generation = ?1",
-            [&generation],
+            "UPDATE log SET extra = json_set(extra, '$.delegated', 1) WHERE id = ?1",
+            params![log_id],
         )
         .map_err(error)?;
         tx.commit().map_err(error)?;
@@ -454,16 +509,12 @@ pub(crate) fn report_outcome(
          SELECT ?1, ?2, t.id, t.task_id, t.dag_id, t.run_id, t.region_index,
                 t.try_number, r.logical_date, nullif(d.owners, ''),
                 CASE WHEN t.hostname IS NOT NULL AND t.hostname <> ''
-                     THEN json_object('host_name', t.hostname) END
+                     THEN json_object('executor_id', ?3, 'report', ?4, 'host_name', t.hostname)
+                     ELSE json_object('executor_id', ?3, 'report', ?4) END
          FROM task_instance AS t
          JOIN dag_run AS r ON r.dag_id = t.dag_id AND r.run_id = t.run_id
-         JOIN dag AS d ON d.dag_id = t.dag_id WHERE t.id = ?3",
-        params![now, state, id],
-    )
-    .map_err(error)?;
-    tx.execute(
-        "UPDATE riir_attempt SET writer = 'rust', receipt = ?1, successor_id = ?2 WHERE generation = ?3",
-        params![payload, retry.then_some(successor_id), generation],
+         JOIN dag AS d ON d.dag_id = t.dag_id WHERE t.id = ?5",
+        params![now, state, generation, payload, id],
     )
     .map_err(error)?;
     tx.commit().map_err(error)?;

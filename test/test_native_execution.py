@@ -105,6 +105,25 @@ trigger_dag("asset_execution" if mode == "asset" else "native_execution",
             triggered_by=DagRunTriggeredByType.CLI)
 """
 
+_OWNERSHIP_PROBE = """\
+import os
+from pathlib import Path
+
+if os.environ.get("RIIR_OWNERSHIP_PROBE"):
+    Path("ownership_probe_ready").touch()
+    from airflow.models.dagrun import DagRun
+
+    original = DagRun.update_state
+
+    def observe(self, *args, **kwargs):
+        result = original(self, *args, **kwargs)
+        with Path("dagrun_update_state_calls").open("a") as file:
+            file.write(f"{self.run_id}:{self.state}\\n")
+        return result
+
+    DagRun.update_state = observe
+"""
+
 
 def _wait_for(predicate, *logs):
     deadline = time.monotonic() + 60
@@ -152,6 +171,7 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
 
     run("-m", "airflow", "db", "migrate")
     run("-m", "airflow", "dag-processor", "--num-runs", "1")
+    (tmp_path / "sitecustomize.py").write_text(_OWNERSHIP_PROBE)
     api_log = tmp_path / "api.log"
     scheduler_log = tmp_path / "scheduler.log"
     replacement_log = tmp_path / "replacement.log"
@@ -165,6 +185,10 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
         port = listener.getsockname()[1]
         env["AIRFLOW__CORE__EXECUTION_API_SERVER_URL"] = (
             f"http://127.0.0.1:{port}/execution/"
+        )
+        scheduler_env = {**env, "RIIR_OWNERSHIP_PROBE": "1"}
+        scheduler_env["PYTHONPATH"] = os.pathsep.join(
+            filter(None, (str(tmp_path), scheduler_env.get("PYTHONPATH", "")))
         )
 
         def complete(mode, task_state, run_state, log):
@@ -189,7 +213,9 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
             pass_fds=(listener.fileno(),),
         ) as api:
             _wait_for_api(api, port, api_log)
-            with _process(scheduler, scheduler_log, env=env, cwd=tmp_path) as first:
+            with _process(
+                scheduler, scheduler_log, env=scheduler_env, cwd=tmp_path
+            ) as first:
                 zero_exits = 0
                 for mode, state, final in (
                     ("success", "success", "success"),
@@ -229,7 +255,9 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
                 db.execute("UPDATE job SET state = 'failed' WHERE id = ?", (owner,))
 
             try:
-                with _process(scheduler, replacement_log, env=env, cwd=tmp_path):
+                with _process(
+                    scheduler, replacement_log, env=scheduler_env, cwd=tmp_path
+                ):
                     _wait_for(
                         lambda: db.execute(
                             "SELECT 1 FROM job WHERE id > ? AND job_type = 'SchedulerJob' "
@@ -330,6 +358,25 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
         assert db.execute(
             "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'riir_attempt'"
         ).fetchone() == (0,)
+        assert (tmp_path / "ownership_probe_ready").exists()
+        ownership_calls = tmp_path / "dagrun_update_state_calls"
+        delegated = (
+            {
+                (run_id, state)
+                for run_id, state in (
+                    line.split(":", 1)
+                    for line in ownership_calls.read_text().splitlines()
+                )
+            }
+            if ownership_calls.exists()
+            else set()
+        )
+        assert not {
+            run_id
+            for run_id, state in delegated
+            if run_id in {"success", "skip", "retry", "failure", "restart"}
+            and state in {"success", "failed"}
+        }, delegated
         _assert_fenced_receipts(db, database)
         atomicity_database = tmp_path / "atomicity.db"
         with closing(sqlite3.connect(atomicity_database, isolation_level=None)) as copy:

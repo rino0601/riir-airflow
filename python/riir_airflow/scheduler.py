@@ -494,6 +494,9 @@ class SchedulerPhases:
                 or dag.deadline
                 or dag.dagrun_timeout is not None
                 or getattr(dag, "has_task_concurrency_limits", False)
+                or dag.has_on_failure_callback
+                or dag.has_on_success_callback
+                or dag.max_consecutive_failed_dag_runs > 0
             ):
                 graphs.append(None)
                 continue
@@ -536,12 +539,28 @@ class SchedulerPhases:
                     upstreams = {}
                     break
                 upstreams[task.task_id] = sorted(task.upstream_task_ids)
+
+            def is_effective_leaf(task, dag=dag):
+                for down_task_id in task.downstream_task_ids:
+                    down_task = dag.get_task(down_task_id)
+                    if not down_task.is_teardown or down_task.on_failure_fail_dagrun:
+                        return False
+                return not task.is_teardown or task.on_failure_fail_dagrun
+
+            leaf_task_ids = {
+                task.task_id for task in dag.tasks if is_effective_leaf(task)
+            }
+            if not leaf_task_ids:
+                leaf_task_ids = {
+                    task.task_id for task in dag.tasks if not task.downstream_list
+                }
             graphs.append(
                 {
                     "id": dto["id"],
                     "dag_id": dto["dag_id"],
                     "run_id": dto["run_id"],
                     "upstreams": upstreams,
+                    "leaves": sorted(leaf_task_ids),
                 }
                 if upstreams
                 else None

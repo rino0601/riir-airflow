@@ -18,12 +18,19 @@ from airflow.executors.base_executor import get_execution_api_server_url
 from airflow.executors.workloads import BundleInfo, ExecuteTask, TaskInstanceDTO
 from airflow.jobs.scheduler_job_runner import SchedulerJobRunner, prohibit_commit
 from airflow.listeners.listener import get_listener_manager
+from airflow.models.dag import DagModel
 from airflow.models.dag_version import DagVersion
 from airflow.models.dagrun import DagRun
+from airflow.models.taskinstance import SENTINEL_REGION_ID
+from airflow.models.taskinstance import TaskInstance as TI
 from airflow.sdk import timezone
 from airflow.sdk.execution_time.coordinator import get_coordinator_manager
+from airflow.settings import task_instance_mutation_hook
 from airflow.utils.log.task_log_address import TaskLogContext, render_task_log_filename
 from airflow.utils.session import NEW_SESSION, create_session
+from airflow.utils.state import DagRunState
+from airflow.utils.types import DagRunTriggeredByType, DagRunType
+from sqlalchemy.dialects.sqlite import dialect
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import make_transient
 from uuid6 import uuid7
@@ -48,6 +55,29 @@ def _json(value: str | None):
 
 def _uuid(value: str | None) -> UUID | None:
     return UUID(hex=value) if value else None
+
+
+def _sql_datetime(value) -> str | None:
+    if value is None:
+        return None
+    parsed = _datetime(value) if isinstance(value, str) else value
+    return parsed.astimezone(dt_timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+
+
+_SCHEDULE_TYPES = frozenset(
+    {
+        "CronDataIntervalTimetable",
+        "CronTriggerTimetable",
+        "DeltaDataIntervalTimetable",
+        "DeltaTriggerTimetable",
+    }
+)
+_TIMETABLE_MODULES = frozenset(
+    {"airflow.timetables.interval", "airflow.timetables.trigger"}
+)
+_RUN_CONFIG = TI.__table__.c.executor_config.type.bind_processor(dialect())
+_RUN_CARRIER = DagRun.__table__.c.context_carrier.type.bind_processor(dialect())
+_TI_CARRIER = TI.__table__.c.context_carrier.type.bind_processor(dialect())
 
 
 def _database_path() -> Path:
@@ -111,9 +141,11 @@ class NativeSchedulerDriver:
         return self.native.run_iteration(
             self.phases,
             DagRun.DEFAULT_DAGRUNS_TO_EXAMINE,
+            DagModel.NUM_DAGS_PER_DAGRUN_QUERY,
             max_tis,
             self.runner.job.id,
             now,
+            self.runner._scheduler_use_job_schedule,
         )
 
     def recover_queued_workloads(self) -> int | None:
@@ -149,9 +181,223 @@ class SchedulerPhases:
                     self.runner._create_dagruns_for_dags(guard, session)
                 guard.commit()
 
+    def prepare_scheduled_runs(self, dtos: list[dict]) -> list[dict] | None:
+        if not dtos or get_listener_manager().has_listeners:
+            return [] if not dtos else None
+        if get_coordinator_manager().has_coordinators():
+            return None
+        if not getattr(task_instance_mutation_hook, "is_noop", False):
+            return None
+        prepared: list[dict] = []
+        for candidate in dtos:
+            allowed = _json(candidate["allowed_run_types"])
+            if (
+                candidate["timetable_type"] not in _SCHEDULE_TYPES
+                or candidate["timetable_partitioned"]
+                or candidate["timetable_asset_gated"]
+                or candidate["asset_expression"] is not None
+                or candidate["deadline"] is not None
+                or candidate["has_task_concurrency_limits"]
+                or (allowed is not None and "scheduled" not in allowed)
+            ):
+                return None
+            version = _uuid(candidate["dag_version_id"])
+            dag = self._load_dag(candidate["dag_id"], version)
+            if dag is None:
+                return None
+            bundle_version = (
+                None
+                if getattr(dag, "disable_bundle_versioning", False)
+                else candidate["bundle_version"]
+            )
+            timetable = dag.timetable
+            if (
+                not timetable.periodic
+                or timetable.partitioned
+                or timetable.asset_gated
+                or timetable.asset_triggered
+                or type(timetable).__module__ not in _TIMETABLE_MODULES
+                or dag.has_dynamic_nodes
+                or dag.deadline
+            ):
+                return None
+            model = DagModel(
+                dag_id=candidate["dag_id"],
+                next_dagrun=_datetime(candidate["next_dagrun"]),
+                next_dagrun_data_interval_start=_datetime(
+                    candidate["next_dagrun_data_interval_start"]
+                ),
+                next_dagrun_data_interval_end=_datetime(
+                    candidate["next_dagrun_data_interval_end"]
+                ),
+                next_dagrun_create_after=_datetime(
+                    candidate["next_dagrun_create_after"]
+                ),
+            )
+            next_info = timetable.next_run_info_from_dag_model(dag_model=model)
+            if (
+                next_info is None
+                or next_info.partition_key is not None
+                or next_info.partition_date is not None
+            ):
+                return None
+            existing = candidate.get("existing_run")
+            if existing is not None:
+                reference = DagRun(
+                    dag_id=existing["dag_id"],
+                    run_id=existing["run_id"],
+                    logical_date=_datetime(existing["logical_date"]),
+                    data_interval=(
+                        (
+                            _datetime(existing["data_interval_start"]),
+                            _datetime(existing["data_interval_end"]),
+                        )
+                        if existing["data_interval_start"]
+                        and existing["data_interval_end"]
+                        else None
+                    ),
+                    run_after=_datetime(existing["run_after"]),
+                    run_type=existing["run_type"],
+                )
+            else:
+                run_id = timetable.generate_run_id(
+                    run_type=DagRunType.SCHEDULED,
+                    run_after=next_info.run_after,
+                    data_interval=next_info.data_interval,
+                    partition_key=None,
+                )
+                reference = DagRun(
+                    dag_id=candidate["dag_id"],
+                    run_id=run_id,
+                    logical_date=next_info.logical_date,
+                    data_interval=next_info.data_interval,
+                    run_after=next_info.run_after,
+                    conf={},
+                    run_type=DagRunType.SCHEDULED,
+                    triggered_by=DagRunTriggeredByType.TIMETABLE,
+                    state=DagRunState.QUEUED,
+                    creating_job_id=candidate["job_id"],
+                    bundle_version=bundle_version,
+                )
+                reference.created_dag_version_id = version
+                reference.log_template_id = candidate["log_template_id"]
+            model.calculate_dagrun_date_fields(dag=dag, reference_run=reference)
+            tasks: list[dict] = []
+            if existing is None:
+                for task in dag.task_dict.values():
+                    if task.get_needs_expansion():
+                        return None
+                    if (
+                        task.start_date is not None
+                        and reference.logical_date is not None
+                        and task.start_date > reference.logical_date
+                    ):
+                        continue
+                    if (
+                        task.end_date is not None
+                        and reference.logical_date is not None
+                        and reference.logical_date > task.end_date
+                    ):
+                        continue
+                    mapping = TI.insert_mapping(
+                        reference.run_id,
+                        task,
+                        region_index=-1,
+                        region_id=SENTINEL_REGION_ID,
+                        dag_version_id=version,
+                        dag_run=reference,
+                    )
+                    if mapping["executor_config"] or mapping["executor"]:
+                        return None
+                    tasks.append(
+                        {
+                            "id": uuid7().hex,
+                            "task_id": mapping["task_id"],
+                            "dag_id": mapping["dag_id"],
+                            "run_id": reference.run_id,
+                            "region_index": mapping["region_index"],
+                            "region_id": mapping["region_id"].hex,
+                            "try_number": mapping["try_number"],
+                            "max_tries": mapping["max_tries"],
+                            "hostname": mapping["hostname"],
+                            "unixname": mapping["unixname"],
+                            "queue": mapping["queue"],
+                            "pool": mapping["pool"],
+                            "pool_slots": mapping["pool_slots"],
+                            "priority_weight": mapping["priority_weight"],
+                            "operator": mapping["operator"],
+                            "custom_operator_name": mapping["custom_operator_name"],
+                            "is_stub": bool(mapping["is_stub"]),
+                            "executor_config": _RUN_CONFIG(mapping["executor_config"]),
+                            "task_display_name": mapping[
+                                "_task_display_property_value"
+                            ],
+                            "dag_version_id": version.hex,
+                            "context_carrier": json.dumps(
+                                _TI_CARRIER(mapping["context_carrier"])
+                            ),
+                        }
+                    )
+            run_dto = None
+            if existing is None:
+                run_dto = {
+                    "dag_id": reference.dag_id,
+                    "run_id": reference.run_id,
+                    "logical_date": _sql_datetime(reference.logical_date),
+                    "data_interval_start": _sql_datetime(reference.data_interval_start),
+                    "data_interval_end": _sql_datetime(reference.data_interval_end),
+                    "run_after": _sql_datetime(reference.run_after),
+                    "queued_at": _sql_datetime(reference.queued_at),
+                    "state": DagRunState.QUEUED.value,
+                    "run_type": DagRunType.SCHEDULED.value,
+                    "triggered_by": DagRunTriggeredByType.TIMETABLE.name,
+                    "bundle_version": bundle_version,
+                    "conf": json.dumps(reference.conf or {}),
+                    "creating_job_id": candidate["job_id"],
+                    "log_template_id": reference.log_template_id,
+                    "created_at": _sql_datetime(reference.queued_at),
+                    "updated_at": _sql_datetime(reference.queued_at),
+                    "context_carrier": json.dumps(
+                        _RUN_CARRIER(reference.context_carrier)
+                    ),
+                    "created_dag_version_id": version.hex,
+                }
+            prepared.append(
+                {
+                    "dag_id": candidate["dag_id"],
+                    "run": run_dto,
+                    "tasks": tasks,
+                    "next": {
+                        "next_dagrun": _sql_datetime(model.next_dagrun),
+                        "next_dagrun_data_interval_start": _sql_datetime(
+                            model.next_dagrun_data_interval_start
+                        ),
+                        "next_dagrun_data_interval_end": _sql_datetime(
+                            model.next_dagrun_data_interval_end
+                        ),
+                        "next_dagrun_create_after": _sql_datetime(
+                            model.next_dagrun_create_after
+                        ),
+                    },
+                }
+            )
+        return prepared
+
     def prepare_dag_runs(self, dtos: list[dict]) -> bool:
         if any(
-            dto["run_type"] != "manual" or dto["backfill_id"] is not None
+            dto["run_type"] not in {"manual", "scheduled"}
+            or dto["backfill_id"] is not None
+            or (
+                dto["run_type"] == "scheduled"
+                and (
+                    dto["triggered_by"] != DagRunTriggeredByType.TIMETABLE.name
+                    or dto["timetable_type"] not in _SCHEDULE_TYPES
+                    or dto["timetable_partitioned"]
+                    or dto["timetable_asset_gated"]
+                    or dto["asset_expression"] is not None
+                    or dto["deadline"] is not None
+                )
+            )
             for dto in dtos
         ):
             return False
@@ -182,6 +428,7 @@ class SchedulerPhases:
             run.log_template_id = dto["log_template_id"]
             run.context_carrier = _json(dto["context_carrier"])
             run.created_dag_version_id = version
+            run.triggered_by = dto["triggered_by"]
             run.dag = dag
             make_transient(run)
             self._runs[dto["id"]] = run
@@ -227,6 +474,7 @@ class SchedulerPhases:
             return SchedulerJobRunner._do_scheduling(self.runner, session)
 
     def delegate_after_run_creation(self, slot_available: bool) -> int:
+        self.before_runs()
         with create_session() as session:
             with prohibit_commit(session) as guard:
                 self.runner._start_queued_dagruns(session)

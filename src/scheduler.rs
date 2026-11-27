@@ -385,7 +385,9 @@ impl NativeScheduler {
             Some(delegate) => delegate,
             None => return Ok(0),
         };
-        phases.call_method1("between_phases", (PyList::new(phases.py(), &delegate)?,))?;
+        if !delegate.is_empty() {
+            phases.call_method1("delegate_runs", (PyList::new(phases.py(), &delegate)?,))?;
+        }
         let Some(lease) = lease else {
             return Ok(0);
         };

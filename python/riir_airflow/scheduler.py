@@ -503,7 +503,8 @@ class SchedulerPhases:
             )
         return graphs
 
-    def between_phases(self, delegate_ids: list[int] | None = None) -> None:
+    def delegate_runs(self, delegate_ids: list[int] | None = None) -> None:
+        """Run Airflow's scheduling phase for delegated runs and their callbacks."""
         with create_session() as session:
             with prohibit_commit(session) as guard:
                 dag_runs = list(
@@ -540,7 +541,7 @@ class SchedulerPhases:
             with prohibit_commit(session) as guard:
                 self.runner._start_queued_dagruns(session)
                 guard.commit()
-        self.between_phases()
+        self.delegate_runs()
         if not slot_available or self.runner.executor.slots_available <= 0:
             return 0
         return self.delegate_task_phase()

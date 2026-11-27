@@ -916,7 +916,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     try:
         assert locker.stdout.readline().strip() == "locked"
         with patch.object(phases, "before_runs", lambda: None), patch.object(
-            phases, "between_phases", lambda *_: None
+            phases, "delegate_runs", lambda *_: None
         ):
             assert iteration() == 0
         assert observer.execute(
@@ -1350,19 +1350,19 @@ delegate_calls = []
 graph_calls = []
 if mode.endswith("native"):
     phases = runner.native_driver.phases
-    between = phases.between_phases
+    delegate = phases.delegate_runs
     graphs = phases.prepare_dependency_graphs
 
-    def observe_between(delegate_ids=None):
+    def observe_delegate(delegate_ids=None):
         delegate_calls.append(list(delegate_ids or []))
-        return between(delegate_ids)
+        return delegate(delegate_ids)
 
     def observe_graphs(dtos):
         result = graphs(dtos)
         graph_calls.append(result)
         return result
 
-    phases.between_phases = observe_between
+    phases.delegate_runs = observe_delegate
     phases.prepare_dependency_graphs = observe_graphs
 
 
@@ -1398,13 +1398,13 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             "SELECT id FROM dag_run WHERE run_id = 'probe'"
         ).fetchone()[0]
         assert len(graph_calls) == 3
-        assert len(delegate_calls) == 3
         if mode.startswith("fallback"):
+            assert len(delegate_calls) == 3
             assert graph_calls == [[None], [None], [None]]
             assert delegate_calls == [[run_pk], [run_pk], [run_pk]]
         else:
             assert [call[0]["id"] for call in graph_calls] == [run_pk] * 3
-            assert delegate_calls == [[], [], []]
+            assert delegate_calls == []
 """
 
 
@@ -1450,19 +1450,19 @@ delegate_calls = []
 graph_calls = []
 if mode.endswith("native"):
     phases = runner.native_driver.phases
-    between = phases.between_phases
+    delegate = phases.delegate_runs
     graphs = phases.prepare_dependency_graphs
 
-    def observe_between(delegate_ids=None):
+    def observe_delegate(delegate_ids=None):
         delegate_calls.append(list(delegate_ids or []))
-        return between(delegate_ids)
+        return delegate(delegate_ids)
 
     def observe_graphs(dtos):
         result = graphs(dtos)
         graph_calls.append(result)
         return result
 
-    phases.between_phases = observe_between
+    phases.delegate_runs = observe_delegate
     phases.prepare_dependency_graphs = observe_graphs
 
 trigger_dag(
@@ -1528,19 +1528,19 @@ delegate_calls = []
 graph_calls = []
 if mode.endswith("native"):
     phases = runner.native_driver.phases
-    between = phases.between_phases
+    delegate = phases.delegate_runs
     graphs = phases.prepare_dependency_graphs
 
-    def observe_between(delegate_ids=None):
+    def observe_delegate(delegate_ids=None):
         delegate_calls.append(list(delegate_ids or []))
-        return between(delegate_ids)
+        return delegate(delegate_ids)
 
     def observe_graphs(dtos):
         result = graphs(dtos)
         graph_calls.append(result)
         return result
 
-    phases.between_phases = observe_between
+    phases.delegate_runs = observe_delegate
     phases.prepare_dependency_graphs = observe_graphs
 
 trigger_dag(
@@ -1613,7 +1613,7 @@ with closing(sqlite3.connect("airflow.db")) as observer:
         assert len(graph_calls) == 2
         assert graph_calls[0][0]["id"] == run_pk
         assert graph_calls[1] == [None]
-        assert delegate_calls == [[], [run_pk]]
+        assert delegate_calls == [[run_pk]]
 """
 
 
@@ -1668,19 +1668,19 @@ delegate_calls = []
 graph_calls = []
 if mode.endswith("native"):
     phases = runner.native_driver.phases
-    between = phases.between_phases
+    delegate = phases.delegate_runs
     graphs = phases.prepare_dependency_graphs
 
-    def observe_between(delegate_ids=None):
+    def observe_delegate(delegate_ids=None):
         delegate_calls.append(list(delegate_ids or []))
-        return between(delegate_ids)
+        return delegate(delegate_ids)
 
     def observe_graphs(dtos):
         result = graphs(dtos)
         graph_calls.append(result)
         return result
 
-    phases.between_phases = observe_between
+    phases.delegate_runs = observe_delegate
     phases.prepare_dependency_graphs = observe_graphs
 
 trigger_dag(
@@ -1756,19 +1756,19 @@ delegate_calls = []
 graph_calls = []
 if mode.endswith("native"):
     phases = runner.native_driver.phases
-    between = phases.between_phases
+    delegate = phases.delegate_runs
     graphs = phases.prepare_dependency_graphs
 
-    def observe_between(delegate_ids=None):
+    def observe_delegate(delegate_ids=None):
         delegate_calls.append(list(delegate_ids or []))
-        return between(delegate_ids)
+        return delegate(delegate_ids)
 
     def observe_graphs(dtos):
         result = graphs(dtos)
         graph_calls.append(result)
         return result
 
-    phases.between_phases = observe_between
+    phases.delegate_runs = observe_delegate
     phases.prepare_dependency_graphs = observe_graphs
 
 
@@ -1809,13 +1809,13 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             "SELECT id FROM dag_run WHERE run_id = 'probe'"
         ).fetchone()[0]
         assert len(graph_calls) == 3
-        assert len(delegate_calls) == 3
+        assert len(delegate_calls) == 1
         assert [call[0]["id"] if call[0] else None for call in graph_calls] == [
             run_pk,
             run_pk,
             None,
         ]
-        assert delegate_calls == [[], [], [run_pk]]
+        assert delegate_calls == [[run_pk]]
 """
 
 
@@ -1886,13 +1886,13 @@ update_calls = []
 callback_calls = []
 if native:
     phases = runner.native_driver.phases
-    between = phases.between_phases
+    delegate = phases.delegate_runs
 
-    def observe_between(delegate_ids=None):
+    def observe_delegate(delegate_ids=None):
         delegate_calls.append(list(delegate_ids or []))
-        return between(delegate_ids)
+        return delegate(delegate_ids)
 
-    phases.between_phases = observe_between
+    phases.delegate_runs = observe_delegate
 
 original_update_state = DagRun.update_state
 
@@ -1985,12 +1985,12 @@ with closing(sqlite3.connect("airflow.db")) as observer:
         )
         assert len(update_calls) == 1
         if native:
-            assert delegate_calls == [[run_pk], []]
+            assert delegate_calls == [[run_pk]]
     else:
         assert callback_calls == []
         if native:
             assert update_calls == []
-            assert delegate_calls == [[], []]
+            assert delegate_calls == []
 """
 
 
@@ -2005,6 +2005,157 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 def test_native_scheduler_finalizes_task_outcomes(tmp_path: Path, mode: str):
     dag_source = _CALLBACK_DAG if mode.startswith("callback") else _DEPENDENCY_DAG
     _run_probe(tmp_path, mode, dag_source, _TERMINAL_PROBE)
+
+
+_PHASE_HANDOFF_DAG = """\
+from airflow.sdk import DAG, task
+
+with DAG("admission_probe", schedule=None, max_active_runs=1) as dag:
+    @task
+    def upstream():
+        pass
+
+    @task
+    def downstream():
+        pass
+
+    upstream() >> downstream()
+
+
+def note_success(context):
+    pass
+
+
+with DAG(
+    "callback_probe",
+    schedule=None,
+    max_active_runs=1,
+    on_success_callback=note_success,
+) as callback_dag:
+    @task
+    def work():
+        pass
+
+    work()
+"""
+
+_PHASE_HANDOFF_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import timedelta
+from unittest.mock import patch
+
+from airflow.api.common.trigger_dag import trigger_dag
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.dagrun import DagRun
+from airflow.sdk import timezone
+from airflow.utils.session import create_session
+from airflow.utils.types import DagRunTriggeredByType
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+case, scheduler = mode.rsplit("-", 1)
+native = scheduler == "native"
+job = Job()
+runner = NativeSchedulerJobRunner(job) if native else SchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+run_after = timezone.utcnow() - timedelta(minutes=1)
+trigger_dag(
+    "admission_probe", run_id="native_run", run_after=run_after,
+    triggered_by=DagRunTriggeredByType.CLI,
+)
+if case == "mixed":
+    trigger_dag(
+        "callback_probe", run_id="delegated_run", run_after=run_after,
+        triggered_by=DagRunTriggeredByType.CLI,
+    )
+
+delegate_calls = []
+update_calls = []
+callback_calls = []
+if native:
+    phases = runner.native_driver.phases
+    assert not hasattr(phases, "between_phases")
+    delegate = phases.delegate_runs
+
+    def observe_delegate(delegate_ids=None):
+        delegate_calls.append(list(delegate_ids or []))
+        return delegate(delegate_ids)
+
+    phases.delegate_runs = observe_delegate
+    if case == "native-only":
+        def forbidden(*args, **kwargs):
+            raise AssertionError("native-only run entered Airflow run scheduling")
+
+        SchedulerJobRunner._schedule_all_dag_runs = forbidden
+
+original_update_state = DagRun.update_state
+
+def observe_update_state(self, *args, **kwargs):
+    update_calls.append(self.run_id)
+    return original_update_state(self, *args, **kwargs)
+
+DagRun.update_state = observe_update_state
+
+def observe_callbacks(dag, callback=None):
+    if callback:
+        callback_calls.append((callback.dag_id, callback.msg))
+
+runner._send_dag_callbacks_to_processor = observe_callbacks
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+with closing(sqlite3.connect("airflow.db")) as observer:
+    with sqlite3.connect("airflow.db") as writable:
+        writable.executemany(
+            "UPDATE task_instance SET state = 'success' WHERE run_id = ?",
+            [("native_run",)] + ([("delegated_run",)] if case == "mixed" else []),
+        )
+    expected = {"native_run": "success"}
+    if case == "mixed":
+        expected["delegated_run"] = "success"
+    with patch.object(runner, "_parallelism", 0):
+        iteration()
+        iteration()
+    assert dict(observer.execute(
+        "SELECT run_id, state FROM dag_run WHERE run_id IN "
+        "('native_run', 'delegated_run') ORDER BY run_id"
+    )) == expected
+    if case == "mixed":
+        assert callback_calls == [("callback_probe", "success")]
+        if native:
+            run_pk = observer.execute(
+                "SELECT id FROM dag_run WHERE run_id = 'delegated_run'"
+            ).fetchone()[0]
+            assert delegate_calls == [[run_pk]]
+            assert update_calls == ["delegated_run"]
+        else:
+            assert set(update_calls) == {"native_run", "delegated_run"}
+    else:
+        assert callback_calls == []
+        assert update_calls == ([] if native else ["native_run"])
+        if native:
+            assert delegate_calls == []
+"""
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        f"{case}-{scheduler}"
+        for case in ("native-only", "mixed")
+        for scheduler in ("baseline", "native")
+    ],
+)
+def test_native_scheduler_phase_handoff_is_explicit(tmp_path: Path, mode: str):
+    _run_probe(tmp_path, mode, _PHASE_HANDOFF_DAG, _PHASE_HANDOFF_PROBE)
 
 
 def test_database_path_keeps_relative_sqlite_url(monkeypatch):

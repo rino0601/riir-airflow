@@ -63,6 +63,7 @@ class OutcomeClient(Client):
             payload["end_date"] = _sql_datetime(end)
             if delay is not None:
                 retry_at = _sql_datetime(end + timedelta(seconds=delay))
+        content = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return self._native_status(
             method,
             url,
@@ -70,7 +71,7 @@ class OutcomeClient(Client):
             self.database,
             self.generation,
             self.attempt.hex,
-            json.dumps(payload, sort_keys=True, separators=(",", ":")),
+            content,
             uuid7().hex,
             retry_at,
             _sql_datetime(datetime.now(UTC)),

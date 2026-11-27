@@ -454,12 +454,28 @@ class SchedulerPhases:
             return [None] * len(dtos)
         graphs: list[dict | None] = []
         for dto in dtos:
-            dag = self._load_dag(dto["dag_id"], _uuid(dto["created_dag_version_id"]))
+            version = _uuid(dto["created_dag_version_id"])
+            if not dto["bundle_version"]:
+                with create_session() as session:
+                    latest = DagVersion.get_latest_version(
+                        dto["dag_id"], session=session
+                    )
+                if latest is None or latest.id != version:
+                    graphs.append(None)
+                    continue
+            logical_date = (
+                _datetime(dto["logical_date"]) if dto["logical_date"] else None
+            )
+            if logical_date is not None and logical_date > timezone.utcnow():
+                graphs.append(None)
+                continue
+            dag = self._load_dag(dto["dag_id"], version)
             if (
                 dag is None
                 or dag.partial
                 or dag.has_dynamic_nodes
                 or dag.deadline
+                or dag.dagrun_timeout is not None
                 or getattr(dag, "has_task_concurrency_limits", False)
             ):
                 graphs.append(None)

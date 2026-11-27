@@ -205,6 +205,11 @@ class SchedulerPhases:
             dag = self._load_dag(candidate["dag_id"], version)
             if dag is None:
                 return None
+            bundle_version = (
+                None
+                if getattr(dag, "disable_bundle_versioning", False)
+                else candidate["bundle_version"]
+            )
             timetable = dag.timetable
             if (
                 not timetable.periodic
@@ -272,7 +277,7 @@ class SchedulerPhases:
                     triggered_by=DagRunTriggeredByType.TIMETABLE,
                     state=DagRunState.QUEUED,
                     creating_job_id=candidate["job_id"],
-                    bundle_version=candidate["bundle_version"],
+                    bundle_version=bundle_version,
                 )
                 reference.created_dag_version_id = version
                 reference.log_template_id = candidate["log_template_id"]
@@ -302,7 +307,7 @@ class SchedulerPhases:
                         dag_version_id=version,
                         dag_run=reference,
                     )
-                    if mapping["executor_config"]:
+                    if mapping["executor_config"] or mapping["executor"]:
                         return None
                     tasks.append(
                         {
@@ -346,7 +351,7 @@ class SchedulerPhases:
                     "state": DagRunState.QUEUED.value,
                     "run_type": DagRunType.SCHEDULED.value,
                     "triggered_by": DagRunTriggeredByType.TIMETABLE.name,
-                    "bundle_version": candidate["bundle_version"],
+                    "bundle_version": bundle_version,
                     "conf": json.dumps(reference.conf or {}),
                     "creating_job_id": candidate["job_id"],
                     "log_template_id": reference.log_template_id,

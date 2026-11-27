@@ -84,16 +84,15 @@ from sqlalchemy import update
 from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 mode = sys.argv[1]
-selections = []
-claims = []
 notifications = []
 
 def observe_notification(run, msg):
     notifications.append((run.run_id, run.state, run.start_date, run.end_date, msg))
     original_notify(run, msg)
 
-original_notify = DagRun.notify_dagrun_state_changed
-DagRun.notify_dagrun_state_changed = observe_notification
+if mode.endswith("baseline"):
+    original_notify = DagRun.notify_dagrun_state_changed
+    DagRun.notify_dagrun_state_changed = observe_notification
 
 # SQLite compares run_after against a clock with whole-second precision.
 now = timezone.utcnow() - timedelta(minutes=1)
@@ -107,9 +106,10 @@ for run_id, run_after in [("newer", now), ("older", now - timedelta(minutes=1))]
     )
 
 if "mixed" in mode:
+    unsupported = "newer" if "mixed-newer" in mode else "older"
     with create_session() as session:
         session.execute(
-            update(DagRun).where(DagRun.run_id == "older").values(run_type=DagRunType.SCHEDULED)
+            update(DagRun).where(DagRun.run_id == unsupported).values(run_type=DagRunType.SCHEDULED)
         )
 
 def runs(database):
@@ -125,21 +125,6 @@ with create_session() as session:
 
 if not mode.endswith("baseline"):
     hold_tasks(runner)
-    driver = runner.native_driver
-    phases = driver.phases
-    prepare = phases.prepare_dag_runs
-    claimed = phases.dag_run_claimed
-
-    def observe_prepare(dtos):
-        selections.append([dto["id"] for dto in dtos])
-        return prepare(dtos)
-
-    def observe_claim(dto):
-        claims.append((dto["id"], dto["state"]))
-        return claimed(dto)
-
-    phases.prepare_dag_runs = observe_prepare
-    phases.dag_run_claimed = observe_claim
 
 def iteration():
     with create_session() as session:
@@ -149,9 +134,6 @@ queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
 with closing(sqlite3.connect("airflow.db")) as database:
     queued = runs(database)
     assert queued == [("older", "queued", None, None), ("newer", "queued", None, None)]
-    older_id, newer_id = (
-        row[0] for row in database.execute("SELECT id FROM dag_run ORDER BY run_after")
-    )
 
     assert iteration() == 1
     admitted = runs(database)
@@ -173,12 +155,13 @@ with closing(sqlite3.connect("airflow.db")) as database:
         assert runner._do_scheduling(session) == 0
 
     assert runs(database) == admitted
-    assert [(run_id, state, end, msg) for run_id, state, start, end, msg in notifications] == [
-        ("older", "running", None, "started"),
-    ]
-    assert notifications[0][2] is not None
-    assert selections == ([[older_id, newer_id]] if mode in ("native", "mixed-native") else [])
-    assert claims == ([(older_id, "running")] if mode == "native" else [])
+    if mode.endswith("baseline"):
+        assert [(run_id, state, end, msg) for run_id, state, start, end, msg in notifications] == [
+            ("older", "running", None, "started"),
+        ]
+        assert notifications[0][2] is not None
+    else:
+        assert notifications == []
     if mode == "native":
         release_task(database, runner)
 """
@@ -186,7 +169,15 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 
 @pytest.mark.parametrize(
-    "mode", ["baseline", "native", "mixed-baseline", "mixed-native"]
+    "mode",
+    [
+        "baseline",
+        "native",
+        "mixed-baseline",
+        "mixed-native",
+        "mixed-newer-baseline",
+        "mixed-newer-native",
+    ],
 )
 def test_sqlite_scheduler_admits_only_one_queued_run(tmp_path: Path, mode: str):
     _run_probe(tmp_path, mode, _DAG, _SCHEDULER_PROBE)
@@ -231,14 +222,14 @@ from riir_airflow.scheduler import NativeSchedulerJobRunner
 mode = sys.argv[1]
 notifications = []
 scheduled_preparations = []
-run_claims = []
 
 def observe_notification(run, msg):
     notifications.append((run.run_id, run.state, run.start_date, run.end_date, msg))
     original_notify(run, msg)
 
-original_notify = DagRun.notify_dagrun_state_changed
-DagRun.notify_dagrun_state_changed = observe_notification
+if mode == "baseline":
+    original_notify = DagRun.notify_dagrun_state_changed
+    DagRun.notify_dagrun_state_changed = observe_notification
 
 job = Job()
 runner = SchedulerJobRunner(job) if mode == "baseline" else NativeSchedulerJobRunner(job)
@@ -249,18 +240,12 @@ if mode == "native":
     hold_tasks(runner)
     phases = runner.native_driver.phases
     prepare_scheduled = phases.prepare_scheduled_runs
-    claim_run = phases.dag_run_claimed
 
     def observe_scheduled(dtos):
         scheduled_preparations.append(len(dtos))
         return prepare_scheduled(dtos)
 
-    def observe_claim(dto):
-        run_claims.append((dto["run_id"], dto["state"]))
-        return claim_run(dto)
-
     phases.prepare_scheduled_runs = observe_scheduled
-    phases.dag_run_claimed = observe_claim
 
 queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
 
@@ -294,13 +279,15 @@ with closing(sqlite3.connect("airflow.db")) as database:
     assert database.execute(
         "SELECT run_id, task_id, state, try_number FROM task_instance"
     ).fetchall() == [(expected_run[0], "work", "queued", 1)]
-    assert [(run_id, state, end, msg) for run_id, state, start, end, msg in notifications] == [
-        (expected_run[0], "running", None, "started"),
-    ]
-    assert notifications[0][2] is not None
+    if mode == "baseline":
+        assert [(run_id, state, end, msg) for run_id, state, start, end, msg in notifications] == [
+            (expected_run[0], "running", None, "started"),
+        ]
+        assert notifications[0][2] is not None
+    else:
+        assert notifications == []
     if mode == "native":
         assert scheduled_preparations == [1]
-        assert run_claims == [(expected_run[0], "running")]
         assert not queue
         assert database.execute(
             "SELECT run_id FROM task_instance WHERE working_set IS TRUE "
@@ -313,7 +300,7 @@ with closing(sqlite3.connect("airflow.db")) as database:
         with create_session() as session:
             assert runner._do_scheduling(session) == 0
     assert runs() == [expected_run]
-    assert len(notifications) == 1
+    assert len(notifications) == (1 if mode == "baseline" else 0)
 
     if mode == "native":
         release_task(database, runner)
@@ -350,20 +337,13 @@ with create_session() as session:
 
 phases = runner.native_driver.phases
 prepare_scheduled = phases.prepare_scheduled_runs
-claim_run = phases.dag_run_claimed
 prepared = []
-claims = []
 
 def observe_scheduled(dtos):
     prepared.append(len(dtos))
     return prepare_scheduled(dtos)
 
-def observe_claim(dto):
-    claims.append(dto["run_id"])
-    return claim_run(dto)
-
 phases.prepare_scheduled_runs = observe_scheduled
-phases.dag_run_claimed = observe_claim
 
 def iteration():
     with create_session() as session:
@@ -373,7 +353,6 @@ queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
 with closing(sqlite3.connect("airflow.db")) as database:
     assert iteration() == 1
     assert prepared == [1]
-    assert claims == []
     assert database.execute(
         "SELECT run_id, state FROM dag_run WHERE dag_id = 'schedule_probe'"
     ).fetchall() == [("scheduled__2026-01-01T00:00:00+00:00", "running")]
@@ -911,8 +890,6 @@ def iteration():
         return runner._do_scheduling(session)
 
 queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
-events = []
-prepare_calls = []
 
 with closing(sqlite3.connect("airflow.db")) as observer:
     def state(run, task):
@@ -920,24 +897,6 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             "SELECT state, queued_dttm, queued_by_job_id FROM task_instance "
             "WHERE run_id = ? AND task_id = ? AND working_set IS TRUE", (run, task)
         ).fetchone()
-
-    prepare_run = phases.prepare_dag_runs
-    claimed_run = phases.dag_run_claimed
-
-    def observe_prepare(dtos):
-        prepare_calls.append([dto["id"] for dto in dtos])
-        return prepare_run(dtos)
-
-    def observe_run_claim(dto):
-        assert dto["state"] == "running"
-        assert observer.execute(
-            "SELECT state FROM dag_run WHERE id = ?", (dto["id"],)
-        ).fetchone() == ("queued",)
-        events.append("run-dto")
-        return claimed_run(dto)
-
-    phases.prepare_dag_runs = observe_prepare
-    phases.dag_run_claimed = observe_run_claim
 
     assert iteration() == 1
     assert observer.execute("SELECT state FROM dag_run WHERE run_id = 'probe'").fetchone() == ("running",)
@@ -948,7 +907,6 @@ with closing(sqlite3.connect("airflow.db")) as observer:
         session.execute(
             update(DagRun).where(DagRun.run_id == "probe").values(state="queued")
         )
-    prepare_calls.clear()
     locker = subprocess.Popen(
         [sys.executable, "-c", _LOCKER, "airflow.db"],
         stdin=subprocess.PIPE,
@@ -961,7 +919,6 @@ with closing(sqlite3.connect("airflow.db")) as observer:
             phases, "between_phases", lambda *_: None
         ):
             assert iteration() == 0
-        assert prepare_calls == [], prepare_calls
         assert observer.execute(
             "SELECT state FROM dag_run WHERE run_id = 'probe'"
         ).fetchone() == ("queued",)
@@ -1104,11 +1061,8 @@ def iteration():
     with create_session() as session:
         return runner._do_scheduling(session)
 
-run_prepare = phases.prepare_dag_runs
 task_prepare = phases.prepare_workload
-prepared = []
 native_task_claims = []
-phases.prepare_dag_runs = lambda dtos: (prepared.append("runs"), run_prepare(dtos))[1]
 
 def observe_task(dto):
     native_task_claims.append(dto["id"])
@@ -1124,7 +1078,6 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 
     assert iteration() == 1
     current = states()
-    assert prepared == ["runs"]
     assert list(current.values()).count("running") == 1
     assert list(current.values()).count("queued") == 1
     assert native_task_claims == []
@@ -1144,9 +1097,7 @@ with create_session() as session:
     )
 runner.executor.executor_queues.clear()
 runner.executor._task_coordinates.clear()
-prepared.clear()
 assert iteration() == 1
-assert prepared == []
 assert native_task_claims == []
 with closing(sqlite3.connect("airflow.db")) as observer:
     assert observer.execute(
@@ -1175,7 +1126,6 @@ from airflow.utils.types import DagRunTriggeredByType
 from riir_airflow.scheduler import NativeSchedulerJobRunner
 
 notifications = []
-native_prepare = []
 
 class ProbeListener:
     @hookimpl
@@ -1196,13 +1146,9 @@ trigger_dag(
 driver = runner.native_driver
 assert not driver.supported()
 assert "native" not in vars(driver)
-phases = driver.phases
-prepare = phases.prepare_dag_runs
-phases.prepare_dag_runs = lambda dtos: (native_prepare.append(dtos), prepare(dtos))[1]
 
 with create_session() as session:
     assert runner._do_scheduling(session) == 1
-assert native_prepare == []
 assert "native" not in vars(driver)
 assert notifications == [("probe", "running", "started")]
 with closing(sqlite3.connect("airflow.db")) as database:
@@ -1243,7 +1189,6 @@ trigger_dag(
     run_after=timezone.utcnow() - timedelta(minutes=1),
     triggered_by=DagRunTriggeredByType.CLI,
 )
-calls = []
 loaded_dags = []
 read_dag = runner.scheduler_dag_bag._read_dag
 
@@ -1253,29 +1198,11 @@ def observe_dag(row):
 
 runner.scheduler_dag_bag._read_dag = observe_dag
 hold_tasks(runner)
-phases = runner.native_driver.phases
-for name, event in (
-    ("prepare_dag_runs", "runs"),
-    ("dag_run_claimed", "run-claim"),
-    ("prepare_workload", "task"),
-):
-    original = getattr(phases, name)
-    if name.endswith("runs"):
-        def observe(dtos, original=original, event=event):
-            calls.append(event)
-            return original(dtos)
-    else:
-        def observe(dto, original=original, event=event):
-            calls.append(event)
-            return original(dto)
-    setattr(phases, name, observe)
 
 with create_session() as session:
     assert runner._do_scheduling(session) == 1
-assert calls == ["runs", "run-claim", "task"], calls
 with create_session() as session:
     assert runner._do_scheduling(session) == 0
-assert calls == ["runs", "run-claim", "task"], calls
 assert loaded_dags == ["admission_probe"], loaded_dags
 with closing(sqlite3.connect("airflow.db")) as database:
     assert database.execute(

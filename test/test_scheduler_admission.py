@@ -303,8 +303,8 @@ with closing(sqlite3.connect("airflow.db")) as database:
         assert run_claims == [(expected_run[0], "running")]
         assert not queue
         assert database.execute(
-            "SELECT t.run_id FROM riir_attempt AS a JOIN task_instance AS t ON t.id = a.id "
-            "WHERE a.active = 1"
+            "SELECT run_id FROM task_instance WHERE working_set IS TRUE "
+            "AND state = 'queued' AND external_executor_id IS NOT NULL"
         ).fetchone() == (expected_run[0],)
     else:
         assert [workload.ti.run_id for workload in queue.values()] == [expected_run[0]]

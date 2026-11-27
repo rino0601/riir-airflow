@@ -390,6 +390,164 @@ def test_native_scheduler_delegates_unsupported_scheduled_creation(tmp_path: Pat
     _run_probe(tmp_path, "native", _SCHEDULE_DAG, _UNSUPPORTED_SCHEDULE_PROBE)
 
 
+_CAPACITY_DAGS = (
+    _SCHEDULE_DAG
+    + """\
+with DAG(
+    "blocked_probe",
+    schedule="@daily",
+    start_date=datetime(2025, 1, 1),
+    catchup=True,
+    max_active_runs=1,
+) as blocked:
+    @task
+    def blocked_work():
+        pass
+
+    blocked_work()
+"""
+)
+
+_CAPACITY_PROBE = (
+    _HOLDING_PROBE
+    + """\
+import sqlite3
+import sys
+from contextlib import closing
+from datetime import datetime, timezone as dt_timezone
+
+from airflow.executors.workloads import WorkloadType
+from airflow.jobs.job import Job
+from airflow.jobs.scheduler_job_runner import SchedulerJobRunner
+from airflow.models.dag import DagModel
+from airflow.utils.session import create_session
+from sqlalchemy import update
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+mode = sys.argv[1]
+job = Job()
+runner = SchedulerJobRunner(job) if mode == "baseline" else NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+    session.execute(
+        update(DagModel).where(DagModel.dag_id == "blocked_probe").values(
+            next_dagrun=datetime(2025, 1, 1, tzinfo=dt_timezone.utc),
+            next_dagrun_create_after=datetime(2025, 1, 1, tzinfo=dt_timezone.utc),
+            exceeds_max_non_backfill=True,
+        )
+    )
+
+prepared = []
+if mode == "native":
+    hold_tasks(runner)
+    phases = runner.native_driver.phases
+    prepare_scheduled = phases.prepare_scheduled_runs
+
+    def observe_scheduled(dtos):
+        prepared.append(len(dtos))
+        return prepare_scheduled(dtos)
+
+    phases.prepare_scheduled_runs = observe_scheduled
+
+queue = runner.executor.executor_queues[WorkloadType.EXECUTE_TASK]
+
+def iteration():
+    with create_session() as session:
+        return runner._do_scheduling(session)
+
+with closing(sqlite3.connect("airflow.db")) as database:
+    assert iteration() == 1
+    assert database.execute(
+        "SELECT dag_id, run_id FROM dag_run ORDER BY dag_id"
+    ).fetchall() == [("schedule_probe", "scheduled__2026-01-01T00:00:00+00:00")]
+    if mode == "native":
+        assert prepared == [1]
+        assert not queue
+    else:
+        assert prepared == []
+        assert [workload.ti.dag_id for workload in queue.values()] == ["schedule_probe"]
+    if mode == "native":
+        release_task(database, runner)
+"""
+)
+
+
+@pytest.mark.parametrize("mode", ["baseline", "native"])
+def test_sqlite_scheduler_skips_capacity_blocked_dags_before_limit(
+    tmp_path: Path, mode: str
+):
+    _run_probe(
+        tmp_path,
+        mode,
+        _CAPACITY_DAGS,
+        _CAPACITY_PROBE,
+        AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP="1",
+    )
+
+
+_ASSET_FALLBACK_PROBE = """\
+import sqlite3
+import sys
+from contextlib import closing
+
+from airflow.jobs.job import Job
+from airflow.utils.session import create_session
+
+from riir_airflow.scheduler import NativeSchedulerJobRunner
+
+job = Job()
+runner = NativeSchedulerJobRunner(job)
+with create_session() as session:
+    session.add(job)
+
+with closing(sqlite3.connect("airflow.db")) as database:
+    database.execute(
+        'INSERT INTO asset (id, name, uri, "group", extra, created_at, updated_at) '
+        "VALUES (1, 'probe_asset', 's3://probe', '', '{}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    )
+    database.execute(
+        "INSERT INTO asset_event (id, asset_id, extra, timestamp) "
+        "VALUES (1, 1, '{}', CURRENT_TIMESTAMP)"
+    )
+    database.execute(
+        "INSERT INTO asset_dag_run_queue (target_dag_id, asset_event_id, asset_id, created_at) "
+        "VALUES ('schedule_probe', 1, 1, CURRENT_TIMESTAMP)"
+    )
+    database.commit()
+
+phases = runner.native_driver.phases
+before_runs = phases.before_runs
+prepare_scheduled = phases.prepare_scheduled_runs
+delegated = []
+prepared = []
+
+def observe_before():
+    delegated.append(True)
+    return before_runs()
+
+def observe_scheduled(dtos):
+    prepared.append(len(dtos))
+    return prepare_scheduled(dtos)
+
+phases.before_runs = observe_before
+phases.prepare_scheduled_runs = observe_scheduled
+
+with create_session() as session:
+    runner._do_scheduling(session)
+assert delegated == [True]
+assert prepared == []
+with closing(sqlite3.connect("airflow.db")) as database:
+    assert database.execute(
+        "SELECT count(*) FROM dag_run WHERE dag_id = 'schedule_probe'"
+    ).fetchone()[0] >= 1
+"""
+
+
+def test_native_scheduler_delegates_pending_asset_work(tmp_path: Path):
+    _run_probe(tmp_path, "native", _SCHEDULE_DAG, _ASSET_FALLBACK_PROBE)
+
+
 _TaskDAG = """\
 from airflow.sdk import DAG, task
 

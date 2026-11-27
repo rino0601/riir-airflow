@@ -339,6 +339,19 @@ impl NativeScheduler {
         create_runs: bool,
     ) -> PyResult<usize> {
         let lease = self.executor.available(&mut self.connection)?;
+        let pending_assets: bool = self
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM asset_dag_run_queue LIMIT 1)",
+                [],
+                |row| row.get(0),
+            )
+            .map_err(sql_error)?;
+        if pending_assets {
+            return phases
+                .call_method1("delegate_after_run_creation", (lease.is_some(),))?
+                .extract::<usize>();
+        }
 
         let status = self.create_scheduled_runs(phases, create_limit, job_id, now, create_runs)?;
         match status.as_str() {
@@ -528,6 +541,8 @@ impl NativeScheduler {
                  AND d.has_import_errors = 0 AND d.next_dagrun IS NOT NULL
                  AND d.next_dagrun_create_after IS NOT NULL
                  AND d.next_dagrun_create_after <= ?1
+                 AND coalesce(d.exceeds_max_non_backfill, 0) = 0
+                 AND coalesce(a.num_running, 0) < coalesce(d.max_active_runs, 0)
              ORDER BY d.next_dagrun_create_after, d.dag_id LIMIT ?2"
         );
         let mut candidates = Vec::new();

@@ -63,6 +63,124 @@ def _database_state(database):
         )
 
 
+_SERIALIZED_DAG_SOURCE = """\
+from airflow.sdk import DAG, task
+
+with DAG("fixture_probe", schedule=None) as dag:
+    @task
+    def work():
+        pass
+
+    work()
+"""
+
+
+def _serialized_state(database):
+    with closing(sqlite3.connect(database)) as db:
+        dags = db.execute(
+            "SELECT dag_id, is_paused, fileloc, relative_fileloc, bundle_name, "
+            "bundle_version, timetable_type, max_active_runs FROM dag ORDER BY dag_id"
+        ).fetchall()
+        versions = db.execute(
+            "SELECT dag_id, version_number, bundle_name, bundle_version "
+            "FROM dag_version ORDER BY dag_id, version_number"
+        ).fetchall()
+        serialized = [
+            (dag_id, json.dumps(json.loads(data), sort_keys=True))
+            for dag_id, data in db.execute(
+                "SELECT dag_id, data FROM serialized_dag ORDER BY dag_id"
+            )
+        ]
+    return dags, versions, serialized
+
+
+def test_serialized_dag_initial_state_is_reused_and_isolated(
+    tmp_path, parsed_dag_factory
+):
+    dag_files = {"fixture_probe.py": _SERIALIZED_DAG_SOURCE}
+    env = _migration_env()
+    first, first_env = parsed_dag_factory.prepare(tmp_path / "first", env, dag_files)
+    template_count = parsed_dag_factory.template_count
+    second, second_env = parsed_dag_factory.prepare(
+        tmp_path / "second",
+        {
+            **env,
+            "AIRFLOW__CORE__EXECUTOR": (
+                "riir_airflow.executors.asgi_executor.AsgiExecutor"
+            ),
+        },
+        dag_files,
+    )
+
+    assert parsed_dag_factory.template_count == template_count
+    assert (
+        first_env["AIRFLOW__CORE__DAGS_FOLDER"]
+        == second_env["AIRFLOW__CORE__DAGS_FOLDER"]
+    )
+    assert first != second
+    initial_state = _serialized_state(first)
+    assert _serialized_state(second) == initial_state
+
+    with sqlite3.connect(first) as db:
+        db.execute("UPDATE dag SET is_paused = 1 WHERE dag_id = 'fixture_probe'")
+    assert _serialized_state(second) == initial_state
+
+
+def test_serialized_dag_templates_track_source_and_parse_settings(
+    tmp_path, parsed_dag_factory
+):
+    env = {**_migration_env(), "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION": "False"}
+    dag_files = {"fixture_probe.py": _SERIALIZED_DAG_SOURCE}
+    initial_count = parsed_dag_factory.template_count
+    first, first_env = parsed_dag_factory.prepare(tmp_path / "first", env, dag_files)
+    assert parsed_dag_factory.template_count == initial_count + 1
+
+    changed, changed_env = parsed_dag_factory.prepare(
+        tmp_path / "changed",
+        env,
+        {
+            "fixture_probe.py": _SERIALIZED_DAG_SOURCE.replace(
+                "fixture_probe", "other_probe"
+            )
+        },
+    )
+    paused, paused_env = parsed_dag_factory.prepare(
+        tmp_path / "paused",
+        {**env, "AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION": "True"},
+        dag_files,
+    )
+
+    assert parsed_dag_factory.template_count == initial_count + 3
+    assert (
+        len(
+            {
+                first_env["AIRFLOW__CORE__DAGS_FOLDER"],
+                changed_env["AIRFLOW__CORE__DAGS_FOLDER"],
+                paused_env["AIRFLOW__CORE__DAGS_FOLDER"],
+            }
+        )
+        == 3
+    )
+    assert _serialized_state(first) != _serialized_state(changed)
+    assert _serialized_state(first) != _serialized_state(paused)
+
+
+def test_fresh_parse_keeps_case_dag_path(tmp_path, parsed_dag_factory):
+    template_count = parsed_dag_factory.template_count
+    database, env = parsed_dag_factory.prepare(
+        tmp_path / "case",
+        _migration_env(),
+        {"fixture_probe.py": _SERIALIZED_DAG_SOURCE},
+        fresh=True,
+    )
+    dags = tmp_path / "case" / "dags"
+
+    assert env["AIRFLOW__CORE__DAGS_FOLDER"] == str(dags)
+    assert (dags / "fixture_probe.py").exists()
+    assert _serialized_state(database)[0][0][2] == str(dags / "fixture_probe.py")
+    assert parsed_dag_factory.template_count == template_count
+
+
 def test_migrated_database_copies_are_equivalent_and_isolated(
     tmp_path, migrated_db_factory
 ):

@@ -2,4 +2,4 @@
 set -euo pipefail
 
 # 기본 pytest에서 제외한 차분 테스트만 실행한다.
-uv run pytest -q -m differential
+uv run pytest -q --durations=0 -m differential

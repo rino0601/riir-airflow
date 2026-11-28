@@ -180,9 +180,9 @@ with closing(sqlite3.connect("airflow.db")) as database:
     ],
 )
 def test_sqlite_scheduler_admits_only_one_queued_run(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
-    _run_probe(tmp_path, mode, migrated_db_factory, _DAG, _SCHEDULER_PROBE)
+    _run_probe(tmp_path, mode, parsed_dag_factory, _DAG, _SCHEDULER_PROBE)
 
 
 _SCHEDULE_DAG = """\
@@ -312,9 +312,9 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 @pytest.mark.parametrize("mode", ["baseline", "native"])
 def test_sqlite_scheduler_creates_and_starts_scheduled_run(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
-    _run_probe(tmp_path, mode, migrated_db_factory, _SCHEDULE_DAG, _SCHEDULE_PROBE)
+    _run_probe(tmp_path, mode, parsed_dag_factory, _SCHEDULE_DAG, _SCHEDULE_PROBE)
 
 
 _UNSUPPORTED_SCHEDULE_PROBE = """\
@@ -371,12 +371,12 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 
 def test_native_scheduler_delegates_unsupported_scheduled_creation(
-    tmp_path: Path, migrated_db_factory
+    tmp_path: Path, parsed_dag_factory
 ):
     _run_probe(
         tmp_path,
         "native",
-        migrated_db_factory,
+        parsed_dag_factory,
         _SCHEDULE_DAG,
         _UNSUPPORTED_SCHEDULE_PROBE,
     )
@@ -442,12 +442,12 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 
 def test_native_scheduler_delegates_explicit_executor_tasks(
-    tmp_path: Path, migrated_db_factory
+    tmp_path: Path, parsed_dag_factory
 ):
     _run_probe(
         tmp_path,
         "native",
-        migrated_db_factory,
+        parsed_dag_factory,
         _SCHEDULE_EXECUTOR_DAG,
         _SCHEDULE_EXECUTOR_PROBE,
     )
@@ -523,12 +523,12 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 @pytest.mark.parametrize("mode", ["baseline", "native"])
 def test_scheduled_run_honors_disabled_bundle_versioning(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     _run_probe(
         tmp_path,
         mode,
-        migrated_db_factory,
+        parsed_dag_factory,
         _SCHEDULE_DISABLED_VERSION_DAG,
         _SCHEDULE_DISABLED_VERSION_PROBE,
     )
@@ -619,12 +619,12 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 @pytest.mark.parametrize("mode", ["baseline", "native"])
 def test_sqlite_scheduler_skips_capacity_blocked_dags_before_limit(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     _run_probe(
         tmp_path,
         mode,
-        migrated_db_factory,
+        parsed_dag_factory,
         _CAPACITY_DAGS,
         _CAPACITY_PROBE,
         AIRFLOW__SCHEDULER__MAX_DAGRUNS_TO_CREATE_PER_LOOP="1",
@@ -690,10 +690,10 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 
 def test_native_scheduler_delegates_pending_asset_work(
-    tmp_path: Path, migrated_db_factory
+    tmp_path: Path, parsed_dag_factory
 ):
     _run_probe(
-        tmp_path, "native", migrated_db_factory, _SCHEDULE_DAG, _ASSET_FALLBACK_PROBE
+        tmp_path, "native", parsed_dag_factory, _SCHEDULE_DAG, _ASSET_FALLBACK_PROBE
     )
 
 
@@ -860,12 +860,12 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 @pytest.mark.parametrize("mode", ["baseline", "native", "fallback"])
 def test_sqlite_scheduler_admits_task_attempts(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     _run_probe(
         tmp_path,
         mode,
-        migrated_db_factory,
+        parsed_dag_factory,
         _TaskDAG,
         _TASK_PROBE,
         AIRFLOW__CORE__PARALLELISM="4" if mode == "native" else "1",
@@ -1047,8 +1047,8 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 )
 
 
-def test_native_scheduler_transaction_boundaries(tmp_path: Path, migrated_db_factory):
-    _run_probe(tmp_path, "native", migrated_db_factory, _DAG, _BOUNDARY_PROBE)
+def test_native_scheduler_transaction_boundaries(tmp_path: Path, parsed_dag_factory):
+    _run_probe(tmp_path, "native", parsed_dag_factory, _DAG, _BOUNDARY_PROBE)
 
 
 _FALLBACK_PROBE = """\
@@ -1140,8 +1140,8 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 """
 
 
-def test_native_scheduler_fallback_before_write(tmp_path: Path, migrated_db_factory):
-    _run_probe(tmp_path, "native", migrated_db_factory, _DAG, _FALLBACK_PROBE)
+def test_native_scheduler_fallback_before_write(tmp_path: Path, parsed_dag_factory):
+    _run_probe(tmp_path, "native", parsed_dag_factory, _DAG, _FALLBACK_PROBE)
 
 
 _LISTENER_PROBE = """\
@@ -1195,8 +1195,8 @@ with closing(sqlite3.connect("airflow.db")) as database:
 """
 
 
-def test_native_scheduler_delegates_with_listeners(tmp_path: Path, migrated_db_factory):
-    _run_probe(tmp_path, "native", migrated_db_factory, _DAG, _LISTENER_PROBE)
+def test_native_scheduler_delegates_with_listeners(tmp_path: Path, parsed_dag_factory):
+    _run_probe(tmp_path, "native", parsed_dag_factory, _DAG, _LISTENER_PROBE)
 
 
 _RUNNER_PROBE = (
@@ -1251,7 +1251,7 @@ with closing(sqlite3.connect("airflow.db")) as database:
 
 
 def test_scheduler_entry_point_runner_calls_native_claims(
-    tmp_path: Path, migrated_db_factory
+    tmp_path: Path, parsed_dag_factory
 ):
     dag_source = (
         _DAG
@@ -1264,7 +1264,7 @@ with DAG("unrelated_probe", schedule=None):
     unrelated()
 """
     )
-    _run_probe(tmp_path, "native", migrated_db_factory, dag_source, _RUNNER_PROBE)
+    _run_probe(tmp_path, "native", parsed_dag_factory, dag_source, _RUNNER_PROBE)
 
 
 _ENTRYPOINT_PROBE = """\
@@ -1313,11 +1313,11 @@ with sqlite3.connect("airflow.db") as database:
 """
 
 
-def test_python_module_scheduler_entry_point(tmp_path: Path, migrated_db_factory):
+def test_python_module_scheduler_entry_point(tmp_path: Path, parsed_dag_factory):
     _run_probe(
         tmp_path,
         "native",
-        migrated_db_factory,
+        parsed_dag_factory,
         _DAG,
         _ENTRYPOINT_PROBE,
         AIRFLOW__SCHEDULER__NUM_RUNS="1",
@@ -1455,12 +1455,12 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     ],
 )
 def test_native_scheduler_evaluates_task_dependencies(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     dag_source = (
         _DEPENDENCY_FALLBACK_DAG if mode.startswith("fallback") else _DEPENDENCY_DAG
     )
-    _run_probe(tmp_path, mode, migrated_db_factory, dag_source, _DEPENDENCY_PROBE)
+    _run_probe(tmp_path, mode, parsed_dag_factory, dag_source, _DEPENDENCY_PROBE)
 
 
 _FUTURE_LOGICAL_DATE_PROBE = """\
@@ -1534,10 +1534,10 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 
 @pytest.mark.parametrize("mode", ["future-baseline", "future-native"])
 def test_native_scheduler_defers_future_logical_dates(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     _run_probe(
-        tmp_path, mode, migrated_db_factory, _DEPENDENCY_DAG, _FUTURE_LOGICAL_DATE_PROBE
+        tmp_path, mode, parsed_dag_factory, _DEPENDENCY_DAG, _FUTURE_LOGICAL_DATE_PROBE
     )
 
 
@@ -1662,10 +1662,15 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 
 @pytest.mark.parametrize("mode", ["version-baseline", "version-native"])
 def test_native_scheduler_delegates_changed_unpinned_runs(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     _run_probe(
-        tmp_path, mode, migrated_db_factory, _DEPENDENCY_DAG, _VERSION_CHANGE_PROBE
+        tmp_path,
+        mode,
+        parsed_dag_factory,
+        _DEPENDENCY_DAG,
+        _VERSION_CHANGE_PROBE,
+        fresh_parse=True,
     )
 
 
@@ -1768,9 +1773,9 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 
 @pytest.mark.parametrize("mode", ["timeout-baseline", "timeout-native"])
 def test_native_scheduler_delegates_dagrun_timeouts(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
-    _run_probe(tmp_path, mode, migrated_db_factory, _TIMEOUT_DAG, _TIMEOUT_PROBE)
+    _run_probe(tmp_path, mode, parsed_dag_factory, _TIMEOUT_DAG, _TIMEOUT_PROBE)
 
 
 _RETRY_PROBE = """\
@@ -1870,9 +1875,9 @@ with closing(sqlite3.connect("airflow.db")) as observer:
 
 @pytest.mark.parametrize("mode", ["retry-baseline", "retry-native"])
 def test_native_scheduler_honors_retry_period(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
-    _run_probe(tmp_path, mode, migrated_db_factory, _DEPENDENCY_DAG, _RETRY_PROBE)
+    _run_probe(tmp_path, mode, parsed_dag_factory, _DEPENDENCY_DAG, _RETRY_PROBE)
 
 
 _CALLBACK_DAG = """\
@@ -2054,10 +2059,10 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     ],
 )
 def test_native_scheduler_finalizes_task_outcomes(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     dag_source = _CALLBACK_DAG if mode.startswith("callback") else _DEPENDENCY_DAG
-    _run_probe(tmp_path, mode, migrated_db_factory, dag_source, _TERMINAL_PROBE)
+    _run_probe(tmp_path, mode, parsed_dag_factory, dag_source, _TERMINAL_PROBE)
 
 
 _PHASE_HANDOFF_DAG = """\
@@ -2208,10 +2213,10 @@ with closing(sqlite3.connect("airflow.db")) as observer:
     ],
 )
 def test_native_scheduler_phase_handoff_is_explicit(
-    tmp_path: Path, mode: str, migrated_db_factory
+    tmp_path: Path, mode: str, parsed_dag_factory
 ):
     _run_probe(
-        tmp_path, mode, migrated_db_factory, _PHASE_HANDOFF_DAG, _PHASE_HANDOFF_PROBE
+        tmp_path, mode, parsed_dag_factory, _PHASE_HANDOFF_DAG, _PHASE_HANDOFF_PROBE
     )
 
 
@@ -2228,12 +2233,16 @@ def test_database_path_keeps_relative_sqlite_url(monkeypatch):
 
 
 def _run_probe(
-    tmp_path: Path, mode: str, db_factory, dag_source: str, probe: str, **config: str
+    tmp_path: Path,
+    mode: str,
+    parsed_dag_factory,
+    dag_source: str,
+    probe: str,
+    *,
+    fresh_parse: bool = False,
+    **config: str,
 ):
     assert airflow.__version__ == BASELINE_AIRFLOW_VERSION
-    dags = tmp_path / "dags"
-    dags.mkdir()
-    (dags / "admission_probe.py").write_text(dag_source)
     holding_worker = tmp_path / "holding_worker"
     holding_worker.write_text(f"#!{sys.executable}\n{_HOLDING_WORKER}")
     holding_worker.chmod(0o700)
@@ -2244,7 +2253,6 @@ def _run_probe(
     }
     env.update(
         AIRFLOW_HOME=str(tmp_path),
-        AIRFLOW__CORE__DAGS_FOLDER=str(dags),
         AIRFLOW__CORE__LOAD_EXAMPLES="False",
         AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION="False",
         AIRFLOW__CORE__EXECUTOR=(
@@ -2256,17 +2264,18 @@ def _run_probe(
         AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=f"sqlite:///{tmp_path / 'airflow.db'}",
     )
     env.update(config)
-    db_factory.prepare(tmp_path, env)
-    for args in (
-        ("-m", "airflow", "dag-processor", "--num-runs", "1"),
-        ("-c", probe, mode),
-    ):
-        result = subprocess.run(
-            [sys.executable, *args],
-            env=env,
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            timeout=90,
-        )
-        assert result.returncode == 0, result.stdout + result.stderr
+    _, env = parsed_dag_factory.prepare(
+        tmp_path,
+        env,
+        {"admission_probe.py": dag_source},
+        fresh=fresh_parse,
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", probe, mode],
+        env=env,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

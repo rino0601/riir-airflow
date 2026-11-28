@@ -208,6 +208,19 @@ def parsed_dag_factory(tmp_path_factory, migrated_db_factory):
 
 
 @pytest.fixture
+def admission_probe(tmp_path, parsed_dag_factory):
+    from ._compat import BASELINE_AIRFLOW_VERSION
+    from .probes.harness import ProbeHarness
+
+    harness = ProbeHarness(tmp_path, Path(__file__).parent, BASELINE_AIRFLOW_VERSION)
+
+    def run(dag_names, probe, mode, **config):
+        harness.run(parsed_dag_factory, dag_names, probe, mode, **config)
+
+    return run
+
+
+@pytest.fixture
 def client():
     assert "AIRFLOW_HOME" in os.environ
     assert "AIRFLOW__CORE__EXECUTOR" in os.environ

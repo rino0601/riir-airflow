@@ -1,4 +1,9 @@
 import os
+import sqlite3
+import subprocess
+import sys
+from collections.abc import Mapping
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -17,6 +22,76 @@ os.environ.setdefault(
 )
 os.environ.setdefault("AIRFLOW__CORE__DAGS_FOLDER", str(_venv / "dags"))
 os.environ.setdefault("AIRFLOW__CORE__LOAD_EXAMPLES", "False")
+
+_MIGRATION_PATH_SETTINGS = frozenset(
+    {
+        "AIRFLOW__CORE__DAGS_FOLDER",
+        "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN",
+    }
+)
+
+
+class MigratedDatabaseFactory:
+    def __init__(self, root: Path):
+        self._root = root
+        self._templates: dict[tuple[tuple[str, str], ...], Path] = {}
+
+    def _key(self, env: Mapping[str, str]) -> tuple[tuple[str, str], ...]:
+        return tuple(
+            sorted(
+                (name, value)
+                for name, value in env.items()
+                if name.startswith("AIRFLOW__") and name not in _MIGRATION_PATH_SETTINGS
+            )
+        )
+
+    def _migrate(self, home: Path, env: Mapping[str, str]) -> Path:
+        home.mkdir(parents=True, exist_ok=True)
+        (home / "dags").mkdir(exist_ok=True)
+        database = home / "airflow.db"
+        result = subprocess.run(
+            [sys.executable, "-m", "airflow", "db", "migrate"],
+            env=env,
+            cwd=home,
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        return database
+
+    def fresh(self, home: Path, env: Mapping[str, str]) -> Path:
+        case_env = dict(env)
+        case_env.update(
+            AIRFLOW_HOME=str(home),
+            AIRFLOW__CORE__DAGS_FOLDER=str(home / "dags"),
+            AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=f"sqlite:///{home / 'airflow.db'}",
+        )
+        return self._migrate(home, case_env)
+
+    def template_for(self, env: Mapping[str, str]) -> Path:
+        key = self._key(env)
+        template = self._templates.get(key)
+        if template is None:
+            template = self.fresh(self._root / f"template-{len(self._templates)}", env)
+            self._templates[key] = template
+        return template
+
+    def prepare(self, home: Path, env: Mapping[str, str]) -> Path:
+        template = self.template_for(env)
+        home.mkdir(parents=True, exist_ok=True)
+        database = home / "airflow.db"
+        with (
+            closing(sqlite3.connect(template)) as source,
+            closing(sqlite3.connect(database)) as target,
+        ):
+            source.backup(target)
+        return database
+
+
+@pytest.fixture(scope="session")
+def migrated_db_factory(tmp_path_factory):
+    return MigratedDatabaseFactory(tmp_path_factory.mktemp("airflow-migrated"))
 
 
 @pytest.fixture

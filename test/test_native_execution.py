@@ -134,7 +134,7 @@ def _wait_for(predicate, *logs):
     pytest.fail("\n".join(path.read_text() for path in logs if path.exists()))
 
 
-def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
+def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path, migrated_db_factory):
     dags = tmp_path / "dags"
     dags.mkdir()
     (dags / "native_execution.py").write_text(_DAG)
@@ -169,7 +169,7 @@ def test_manual_dags_use_rust_process_and_outcome_owners(tmp_path):
         )
         assert result.returncode == 0, result.stdout + result.stderr
 
-    run("-m", "airflow", "db", "migrate")
+    migrated_db_factory.prepare(tmp_path, env)
     run("-m", "airflow", "dag-processor", "--num-runs", "1")
     (tmp_path / "sitecustomize.py").write_text(_OWNERSHIP_PROBE)
     api_log = tmp_path / "api.log"

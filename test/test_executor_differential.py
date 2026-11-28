@@ -92,7 +92,7 @@ def _wait_for_api(process, port, log):
     pytest.fail(f"Execution API did not start:\n{log.read_text()}")
 
 
-def _run_retry_dag(home: Path, executor: str):
+def _run_retry_dag(home: Path, executor: str, db_factory):
     dags = home / "dags"
     dags.mkdir(parents=True)
     dag = dags / "retry_probe.py"
@@ -115,15 +115,7 @@ def _run_retry_dag(home: Path, executor: str):
         AIRFLOW__API_AUTH__JWT_SECRET="retry-probe-test-secret-" * 3,
         RETRY_PROBE_ATTEMPTS=str(attempts),
     )
-    result = subprocess.run(
-        [sys.executable, "-m", "airflow", "db", "migrate"],
-        env=env,
-        cwd=home,
-        capture_output=True,
-        text=True,
-        timeout=90,
-    )
-    assert result.returncode == 0, result.stdout + result.stderr
+    database = db_factory.prepare(home, env)
 
     # Record even a zero-delay retry's transient state without polling SQLite.
     with closing(sqlite3.connect(database)) as db:
@@ -174,11 +166,15 @@ def _run_retry_dag(home: Path, executor: str):
     return states, dag_states, executions
 
 
-def test_sqlite_retry_matches_airflow(tmp_path):
+def test_sqlite_retry_matches_airflow(tmp_path, migrated_db_factory):
     assert airflow.__version__ == BASELINE_AIRFLOW_VERSION
-    baseline = _run_retry_dag(tmp_path / "airflow", "LocalExecutor")
+    baseline = _run_retry_dag(
+        tmp_path / "airflow", "LocalExecutor", migrated_db_factory
+    )
     asgi = _run_retry_dag(
-        tmp_path / "asgi", "riir_airflow.executors.asgi_executor.AsgiExecutor"
+        tmp_path / "asgi",
+        "riir_airflow.executors.asgi_executor.AsgiExecutor",
+        migrated_db_factory,
     )
     expected = (
         [

@@ -26,6 +26,76 @@ def _status(database, *, cwd=None):
     )
 
 
+def _migration_env():
+    env = {
+        name: value
+        for name, value in os.environ.items()
+        if not name.startswith("AIRFLOW")
+    }
+    env.update(
+        AIRFLOW__CORE__LOAD_EXAMPLES="False",
+        AIRFLOW__CORE__EXECUTOR="LocalExecutor",
+        AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="sqlite:///placeholder.db",
+    )
+    return env
+
+
+def _database_state(database):
+    with closing(sqlite3.connect(database)) as db:
+        tables = [
+            name
+            for (name,) in db.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"
+            )
+        ]
+        return (
+            db.execute(
+                "SELECT type, name, tbl_name, sql FROM sqlite_master "
+                "ORDER BY type, name"
+            ).fetchall(),
+            db.execute("SELECT version_num FROM alembic_version").fetchall(),
+            tuple(
+                (name, db.execute(f'SELECT count(*) FROM "{name}"').fetchone()[0])
+                for name in tables
+            ),
+            db.execute("PRAGMA integrity_check").fetchall(),
+            db.execute("PRAGMA foreign_key_check").fetchall(),
+        )
+
+
+def test_migrated_database_copies_are_equivalent_and_isolated(
+    tmp_path, migrated_db_factory
+):
+    env = _migration_env()
+    first = migrated_db_factory.prepare(tmp_path / "first", env)
+    second = migrated_db_factory.prepare(tmp_path / "second", env)
+    fresh = migrated_db_factory.fresh(tmp_path / "fresh", env)
+    configured_env = {**env, "AIRFLOW__CORE__PARALLELISM": "4"}
+    configured = migrated_db_factory.prepare(tmp_path / "configured", configured_env)
+
+    assert migrated_db_factory.template_for(env) == migrated_db_factory.template_for(
+        {**env, "AIRFLOW__DATABASE__SQL_ALCHEMY_CONN": "sqlite:///elsewhere.db"}
+    )
+    assert migrated_db_factory.template_for(env) != migrated_db_factory.template_for(
+        configured_env
+    )
+    assert (
+        _database_state(first)
+        == _database_state(second)
+        == _database_state(configured)
+        == _database_state(fresh)
+    )
+
+    with sqlite3.connect(first) as db:
+        db.execute(
+            "INSERT INTO dag_run (dag_id, run_id, run_type, run_after, state) "
+            "VALUES ('probe', 'written', 'manual', CURRENT_TIMESTAMP, 'queued')"
+        )
+    with closing(sqlite3.connect(second)) as db:
+        assert db.execute("SELECT count(*) FROM dag_run").fetchone() == (0,)
+        assert db.execute("PRAGMA integrity_check").fetchall() == [("ok",)]
+
+
 def test_scheduler_status_reads_committed_airflow_state(tmp_path):
     database = tmp_path / "airflow metadata.db"
     env = {

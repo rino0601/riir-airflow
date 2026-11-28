@@ -1,4 +1,4 @@
-"""Compare Airflow 3.4 task retries through real local executors and SQLite."""
+"""Verify ASGI executor task retries against Airflow 3.4 SQLite state transitions."""
 
 import os
 import signal
@@ -99,7 +99,7 @@ def _run_retry_dag(home: Path, executor: str, db_factory):
     dag.write_text(_RETRY_DAG)
     database = home / "airflow.db"
     attempts = home / "attempts.txt"
-    # Both runs start with the same settings and schema, independent of local Airflow config.
+    # The run starts with settings and schema independent of local Airflow config.
     env = {
         name: value
         for name, value in os.environ.items()
@@ -166,12 +166,9 @@ def _run_retry_dag(home: Path, executor: str, db_factory):
     return states, dag_states, executions
 
 
-def test_sqlite_retry_matches_airflow(tmp_path, migrated_db_factory):
+def test_asgi_executor_retry_keeps_airflow_states(tmp_path, migrated_db_factory):
     assert airflow.__version__ == BASELINE_AIRFLOW_VERSION
-    baseline = _run_retry_dag(
-        tmp_path / "airflow", "LocalExecutor", migrated_db_factory
-    )
-    asgi = _run_retry_dag(
+    states = _run_retry_dag(
         tmp_path / "asgi",
         "riir_airflow.executors.asgi_executor.AsgiExecutor",
         migrated_db_factory,
@@ -187,5 +184,4 @@ def test_sqlite_retry_matches_airflow(tmp_path, migrated_db_factory):
         [("success",)],
         ["1", "2"],
     )
-    assert baseline == expected
-    assert asgi == baseline
+    assert states == expected

@@ -688,7 +688,7 @@ def changed_unpinned_runs(mode):
                 )
             ) == {"upstream": "scheduled", "downstream": None}
 
-        replace_dag("admission_probe.py", "version_change_probe.py")
+        replace_dag("dependency_probe.py", "version_change_probe.py")
         run_dag_processor(2)
 
         with patch.object(runner, "_parallelism", 0):

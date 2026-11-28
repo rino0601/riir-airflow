@@ -32,6 +32,7 @@
 - 훅이 없으면 먼저 `mise run setup`으로 dev 의존성을 동기화하고 git 커밋 훅을 설치한다.
 - 코드 수정 후 `mise run format`으로 Python과 Rust를 포맷하고 `mise run check`를 실행한다. 자동 수정할 수 있는 문제는 포매터와 린터로 먼저 해결한다.
 - `mise run check`는 prek 설정 검사 → 포맷/린트 → 테스트 → 문서 빌드 순서로 돌고, 하나라도 실패하면 즉시 중단된다.
+- 테스트 코드에서 `sleep` 사용을 금지한다. 고정 시간 대기나 sleep 기반 폴링 대신 이벤트, 상태 변화 또는 프로세스 종료 등으로 동기화하고 필요한 경우 timeout을 둔다.
 - 커밋 훅이 포맷을 수정하면 커밋이 중단된다. 수정 내용을 확인하고 다시 스테이징한 뒤 커밋한다.
 - 훅을 직접 돌릴 때는 `uv run prek run --all-files`, 설정만 검사할 때는 `uv run prek validate-config prek.toml`을 쓴다.
 
